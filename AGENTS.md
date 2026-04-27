@@ -20,6 +20,10 @@ Keep this file small. Put durable project knowledge in `docs/` and link to it fr
 
 ## Operating Rules
 
+- Keep living implementation plans in `$HOME/.code/plans`, not in
+  the repository. Add, update, and remove those plans as work evolves; only
+  commit repo docs when behavior, architecture, commands, or product decisions
+  change.
 - Do not build a terminal/TUI streaming UI unless the operator explicitly asks for a diagnostic view.
 - Model Every Code sessions as structured product objects: sessions, turns, approvals, requested input, status, diffs, messages, and notifications.
 - Trusted Every Code sessions should appear automatically in clients; do not introduce per-session pairing as the default flow.
