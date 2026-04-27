@@ -8,7 +8,8 @@ import type {
     SessionStatus,
     SessionTurn,
 } from "@code-everywhere/contracts"
-import { getProjectedSessions, projectCockpitEvents } from "@code-everywhere/contracts"
+import type { CockpitIngestionSnapshot } from "@code-everywhere/server"
+import { createCockpitEventStore } from "@code-everywhere/server"
 
 type SourceCockpitSession = EveryCodeSession & {
     unreadCount: number
@@ -391,50 +392,52 @@ const cockpitFixtureSource: SourceCockpitFixture = {
     ],
 }
 
-const projectCockpitFixture = (fixture: SourceCockpitFixture): CockpitFixture => {
+export const createCockpitFixtureEvents = (fixture: SourceCockpitFixture): CockpitProjectionEvent[] => [
+    ...fixture.sessions.flatMap<CockpitProjectionEvent>((session) => [
+        {
+            kind: "session_hello",
+            session: toEveryCodeSession(session),
+        },
+        ...session.turns.map<CockpitProjectionEvent>((turn) => ({
+            kind: "turn_started",
+            sessionEpoch: session.sessionEpoch,
+            turn,
+        })),
+    ]),
+    ...fixture.approvals.map<CockpitProjectionEvent>((approval) => ({
+        kind: "approval_requested",
+        approval,
+    })),
+    ...fixture.requestedInputs.map<CockpitProjectionEvent>((input) => ({
+        kind: "user_input_requested",
+        input,
+    })),
+    ...fixture.sessions.map<CockpitProjectionEvent>((session) => ({
+        kind: "session_status_changed",
+        sessionId: session.sessionId,
+        sessionEpoch: session.sessionEpoch,
+        status: session.status,
+        summary: session.summary,
+        updatedAt: session.updatedAt,
+    })),
+]
+
+const createCockpitFixtureFromSnapshot = (fixture: SourceCockpitFixture, snapshot: CockpitIngestionSnapshot): CockpitFixture => {
     const unreadCounts = new Map(fixture.sessions.map((session) => [session.sessionId, session.unreadCount]))
     const currentTurnIds = new Map(fixture.sessions.map((session) => [session.sessionId, session.currentTurnId]))
-    const events: CockpitProjectionEvent[] = [
-        ...fixture.sessions.flatMap<CockpitProjectionEvent>((session) => [
-            {
-                kind: "session_hello",
-                session: toEveryCodeSession(session),
-            },
-            ...session.turns.map<CockpitProjectionEvent>((turn) => ({
-                kind: "turn_started",
-                sessionEpoch: session.sessionEpoch,
-                turn,
-            })),
-        ]),
-        ...fixture.approvals.map<CockpitProjectionEvent>((approval) => ({
-            kind: "approval_requested",
-            approval,
-        })),
-        ...fixture.requestedInputs.map<CockpitProjectionEvent>((input) => ({
-            kind: "user_input_requested",
-            input,
-        })),
-        ...fixture.sessions.map<CockpitProjectionEvent>((session) => ({
-            kind: "session_status_changed",
-            sessionId: session.sessionId,
-            sessionEpoch: session.sessionEpoch,
-            status: session.status,
-            summary: session.summary,
-            updatedAt: session.updatedAt,
-        })),
-    ]
-    const state = projectCockpitEvents(events)
 
     return {
         generatedAt: fixture.generatedAt,
-        sessions: getProjectedSessions(state).map((session) => ({
+        sessions: snapshot.sessions.map((session) => ({
             ...session,
             currentTurnId: currentTurnIds.get(session.sessionId) ?? session.currentTurnId,
             unreadCount: unreadCounts.get(session.sessionId) ?? 0,
-            turns: session.turnIds.map((turnId) => state.turns[turnId]).filter((turn): turn is SessionTurn => turn !== undefined),
+            turns: session.turnIds
+                .map((turnId) => snapshot.state.turns[turnId])
+                .filter((turn): turn is SessionTurn => turn !== undefined),
         })),
-        approvals: Object.values(state.pendingApprovals),
-        requestedInputs: Object.values(state.requestedInputs),
+        approvals: Object.values(snapshot.state.pendingApprovals),
+        requestedInputs: Object.values(snapshot.state.requestedInputs),
     }
 }
 
@@ -453,7 +456,10 @@ const toEveryCodeSession = (session: SourceCockpitSession): EveryCodeSession => 
     currentTurnId: session.currentTurnId,
 })
 
-export const cockpitFixture: CockpitFixture = projectCockpitFixture(cockpitFixtureSource)
+export const cockpitFixtureEvents = createCockpitFixtureEvents(cockpitFixtureSource)
+export const cockpitFixtureStore = createCockpitEventStore(cockpitFixtureEvents)
+export const cockpitFixtureSnapshot = cockpitFixtureStore.getSnapshot()
+export const cockpitFixture: CockpitFixture = createCockpitFixtureFromSnapshot(cockpitFixtureSource, cockpitFixtureSnapshot)
 
 export const statusLabels: Record<SessionStatus, string> = {
     running: "Running",

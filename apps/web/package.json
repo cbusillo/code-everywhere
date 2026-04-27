@@ -11,6 +11,7 @@
     },
     "dependencies": {
         "@code-everywhere/contracts": "workspace:*",
+        "@code-everywhere/server": "workspace:*",
         "@radix-ui/react-dialog": "latest",
         "@tailwindcss/vite": "4.2.4",
         "@vitejs/plugin-react": "6.0.1",
