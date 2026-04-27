@@ -18,6 +18,15 @@ describe("cockpit fake data", () => {
         expect(cockpitFixture.requestedInputs.every((input) => sessionIds.has(input.sessionId))).toBe(true)
     })
 
+    it("derives UI sessions from projected contract state", () => {
+        const approvalSession = cockpitFixture.sessions.find((session) => session.sessionId === "ce-alpha")
+
+        expect(approvalSession?.pendingApprovalIds).toEqual(["approval-install-deps"])
+        expect(approvalSession?.pendingInputIds).toEqual([])
+        expect(approvalSession?.turnIds).toEqual(["turn-alpha-1", "turn-alpha-2", "turn-alpha-3"])
+        expect(approvalSession?.turns.map((turn) => turn.id)).toEqual(approvalSession?.turnIds)
+    })
+
     it("puts attention-needed sessions first in the operator queue", () => {
         const attentionSessions = getAttentionSessions(cockpitFixture.sessions)
 
