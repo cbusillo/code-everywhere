@@ -149,6 +149,126 @@ describe("cockpit projection", () => {
         expect(state.notifications.map((notification) => notification.kind)).toEqual(["approval", "input"])
     })
 
+    it("preserves waiting status while pending items remain", () => {
+        const state = projectCockpitEvents([
+            {
+                kind: "session_hello",
+                session: baseSession,
+            },
+            {
+                kind: "approval_requested",
+                approval: {
+                    id: "approval-1",
+                    sessionId: "session-1",
+                    sessionEpoch: "epoch-1",
+                    turnId: "turn-1",
+                    title: "Approve install",
+                    body: "Install dependencies.",
+                    command: "pnpm install",
+                    cwd: "~/code/code-everywhere",
+                    risk: "medium",
+                    requestedAt: "2026-04-27T16:04:00.000Z",
+                },
+            },
+            {
+                kind: "approval_requested",
+                approval: {
+                    id: "approval-2",
+                    sessionId: "session-1",
+                    sessionEpoch: "epoch-1",
+                    turnId: "turn-1",
+                    title: "Approve test",
+                    body: "Run validation.",
+                    command: "pnpm validate",
+                    cwd: "~/code/code-everywhere",
+                    risk: "medium",
+                    requestedAt: "2026-04-27T16:04:15.000Z",
+                },
+            },
+            {
+                kind: "approval_resolved",
+                sessionId: "session-1",
+                sessionEpoch: "epoch-1",
+                approvalId: "approval-1",
+                decision: "approve",
+                resolvedAt: "2026-04-27T16:04:30.000Z",
+            },
+        ])
+
+        expect(state.sessions["session-1"]?.status).toBe("waiting-for-approval")
+        expect(state.sessions["session-1"]?.attention).toBe("approval")
+        expect(state.sessions["session-1"]?.pendingApprovalIds).toEqual(["approval-2"])
+    })
+
+    it("returns to the next pending surface after resolving mixed pending work", () => {
+        const state = projectCockpitEvents([
+            {
+                kind: "session_hello",
+                session: baseSession,
+            },
+            {
+                kind: "approval_requested",
+                approval: {
+                    id: "approval-1",
+                    sessionId: "session-1",
+                    sessionEpoch: "epoch-1",
+                    turnId: "turn-1",
+                    title: "Approve install",
+                    body: "Install dependencies.",
+                    command: "pnpm install",
+                    cwd: "~/code/code-everywhere",
+                    risk: "medium",
+                    requestedAt: "2026-04-27T16:04:00.000Z",
+                },
+            },
+            {
+                kind: "user_input_requested",
+                input: baseInput,
+            },
+            {
+                kind: "user_input_resolved",
+                sessionId: "session-1",
+                sessionEpoch: "epoch-1",
+                inputId: "input-1",
+                resolvedAt: "2026-04-27T16:05:30.000Z",
+            },
+        ])
+
+        expect(state.sessions["session-1"]?.status).toBe("waiting-for-approval")
+        expect(state.sessions["session-1"]?.attention).toBe("approval")
+        expect(state.sessions["session-1"]?.pendingApprovalIds).toEqual(["approval-1"])
+        expect(state.sessions["session-1"]?.pendingInputIds).toEqual([])
+    })
+
+    it("emits notifications for turn-driven blocked and error states", () => {
+        const state = projectCockpitEvents([
+            {
+                kind: "session_hello",
+                session: baseSession,
+            },
+            {
+                kind: "turn_started",
+                sessionEpoch: "epoch-1",
+                turn: baseTurn,
+            },
+            {
+                kind: "turn_status_changed",
+                sessionId: "session-1",
+                sessionEpoch: "epoch-1",
+                turnId: "turn-1",
+                status: "blocked",
+                summary: "Waiting for sandbox approval",
+            },
+        ])
+
+        expect(state.sessions["session-1"]?.status).toBe("blocked")
+        expect(state.sessions["session-1"]?.summary).toBe("Waiting for sandbox approval")
+        expect(state.notifications[state.notifications.length - 1]).toMatchObject({
+            kind: "blocked",
+            title: "Waiting for sandbox approval",
+        })
+    })
+
     it("records stale epoch events without mutating pending work", () => {
         const state = projectCockpitEvents([
             {
