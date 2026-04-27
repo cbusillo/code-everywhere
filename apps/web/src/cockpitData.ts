@@ -393,6 +393,7 @@ const cockpitFixtureSource: SourceCockpitFixture = {
 
 const projectCockpitFixture = (fixture: SourceCockpitFixture): CockpitFixture => {
     const unreadCounts = new Map(fixture.sessions.map((session) => [session.sessionId, session.unreadCount]))
+    const currentTurnIds = new Map(fixture.sessions.map((session) => [session.sessionId, session.currentTurnId]))
     const events: CockpitProjectionEvent[] = [
         ...fixture.sessions.flatMap<CockpitProjectionEvent>((session) => [
             {
@@ -428,6 +429,7 @@ const projectCockpitFixture = (fixture: SourceCockpitFixture): CockpitFixture =>
         generatedAt: fixture.generatedAt,
         sessions: getProjectedSessions(state).map((session) => ({
             ...session,
+            currentTurnId: currentTurnIds.get(session.sessionId) ?? session.currentTurnId,
             unreadCount: unreadCounts.get(session.sessionId) ?? 0,
             turns: session.turnIds.map((turnId) => state.turns[turnId]).filter((turn): turn is SessionTurn => turn !== undefined),
         })),

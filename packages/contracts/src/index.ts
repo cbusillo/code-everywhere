@@ -262,7 +262,7 @@ export const projectCockpitEvent = (state: CockpitProjectionState, event: Cockpi
             return withCurrentSession(state, eventScope(event, event.updatedAt), (draft, session) => {
                 const nextSession = withAttention({
                     ...session,
-                    status: event.status,
+                    status: statusWithPendingWork(event.status, session.pendingApprovalIds, session.pendingInputIds),
                     summary: event.summary ?? session.summary,
                     updatedAt: event.updatedAt,
                 })
