@@ -1,0 +1,27 @@
+{
+    "name": "@code-everywhere/web",
+    "version": "0.0.0",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "dev": "vite --host 127.0.0.1",
+        "build": "vite build",
+        "typecheck": "tsc -p tsconfig.json --noEmit",
+        "test": "vitest run --passWithNoTests"
+    },
+    "dependencies": {
+        "@code-everywhere/contracts": "workspace:*",
+        "@radix-ui/react-dialog": "latest",
+        "@tailwindcss/vite": "4.1.18",
+        "@vitejs/plugin-react": "5.1.2",
+        "lucide-react": "latest",
+        "react": "latest",
+        "react-dom": "latest",
+        "tailwindcss": "4.1.18",
+        "vite": "7.2.7"
+    },
+    "devDependencies": {
+        "@types/react": "latest",
+        "@types/react-dom": "latest"
+    }
+}

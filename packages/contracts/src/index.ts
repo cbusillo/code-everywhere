@@ -1,5 +1,6 @@
 export type SessionId = string
 export type SessionEpoch = string
+export type TurnId = string
 
 export type EveryCodeSession = {
     sessionId: SessionId
@@ -8,10 +9,61 @@ export type EveryCodeSession = {
     cwd: string
     branch: string | null
     pid: number
+    model: string
     status: SessionStatus
+    summary: string
+    startedAt: string
+    updatedAt: string
+    currentTurnId: TurnId | null
 }
 
-export type SessionStatus = "connected" | "running" | "waiting_for_input" | "waiting_for_approval" | "idle" | "ended" | "error"
+export type SessionStatus = "running" | "idle" | "blocked" | "waiting-for-input" | "waiting-for-approval" | "ended" | "error"
+
+export type TurnStatus = "running" | "completed" | "blocked" | "waiting-for-input" | "waiting-for-approval" | "error"
+
+export type SessionTurn = {
+    id: TurnId
+    sessionId: SessionId
+    title: string
+    status: TurnStatus
+    actor: "operator" | "assistant" | "system"
+    startedAt: string
+    completedAt: string | null
+    summary: string
+    steps: TurnStep[]
+}
+
+export type TurnStep = {
+    id: string
+    kind: "message" | "tool" | "status" | "diff" | "artifact" | "error"
+    title: string
+    detail: string
+    timestamp: string
+    state: "pending" | "running" | "completed" | "blocked" | "error"
+}
+
+export type PendingApproval = {
+    id: string
+    sessionId: SessionId
+    sessionEpoch: SessionEpoch
+    turnId: TurnId
+    title: string
+    body: string
+    command: string
+    cwd: string
+    risk: "low" | "medium" | "high"
+    requestedAt: string
+}
+
+export type RequestedInput = {
+    id: string
+    sessionId: SessionId
+    sessionEpoch: SessionEpoch
+    turnId: TurnId
+    title: string
+    requestedAt: string
+    questions: RequestedInputQuestion[]
+}
 
 export type SessionCommand =
     | {
@@ -36,7 +88,7 @@ export type SessionCommand =
           kind: "request_user_input_response"
           sessionId: SessionId
           sessionEpoch: SessionEpoch
-          turnId: string
+          turnId: TurnId
           answers: RequestedInputAnswer[]
       }
 
@@ -68,7 +120,7 @@ export type CockpitEvent =
           kind: "user_input_requested"
           sessionId: SessionId
           sessionEpoch: SessionEpoch
-          turnId: string
+          turnId: TurnId
           title: string
           questions: RequestedInputQuestion[]
       }

@@ -19,7 +19,7 @@
         "@types/node": "latest",
         "eslint": "latest",
         "prettier": "latest",
-        "typescript": "latest",
+        "typescript": "5.9.3",
         "typescript-eslint": "latest",
         "vitest": "latest"
     }
