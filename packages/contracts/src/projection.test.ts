@@ -240,6 +240,48 @@ describe("cockpit projection", () => {
         expect(state.sessions["session-1"]?.pendingInputIds).toEqual([])
     })
 
+    it("does not mark a session idle when a turn completes with pending work", () => {
+        const state = projectCockpitEvents([
+            {
+                kind: "session_hello",
+                session: baseSession,
+            },
+            {
+                kind: "turn_started",
+                sessionEpoch: "epoch-1",
+                turn: baseTurn,
+            },
+            {
+                kind: "approval_requested",
+                approval: {
+                    id: "approval-1",
+                    sessionId: "session-1",
+                    sessionEpoch: "epoch-1",
+                    turnId: "turn-1",
+                    title: "Approve install",
+                    body: "Install dependencies.",
+                    command: "pnpm install",
+                    cwd: "~/code/code-everywhere",
+                    risk: "medium",
+                    requestedAt: "2026-04-27T16:04:00.000Z",
+                },
+            },
+            {
+                kind: "turn_status_changed",
+                sessionId: "session-1",
+                sessionEpoch: "epoch-1",
+                turnId: "turn-1",
+                status: "completed",
+                completedAt: "2026-04-27T16:06:00.000Z",
+            },
+        ])
+
+        expect(state.sessions["session-1"]?.status).toBe("waiting-for-approval")
+        expect(state.sessions["session-1"]?.attention).toBe("approval")
+        expect(state.sessions["session-1"]?.pendingApprovalIds).toEqual(["approval-1"])
+        expect(state.turns["turn-1"]?.status).toBe("completed")
+    })
+
     it("emits notifications for turn-driven blocked and error states", () => {
         const state = projectCockpitEvents([
             {
@@ -322,6 +364,11 @@ describe("cockpit projection", () => {
                 session: baseSession,
             },
             {
+                kind: "turn_started",
+                sessionEpoch: "epoch-1",
+                turn: baseTurn,
+            },
+            {
                 kind: "user_input_requested",
                 input: baseInput,
             },
@@ -338,7 +385,9 @@ describe("cockpit projection", () => {
         const state = projectCockpitEvents(events)
 
         expect(state.requestedInputs).toEqual({})
+        expect(state.turns).toEqual({})
         expect(state.sessions["session-1"]?.sessionEpoch).toBe("epoch-2")
+        expect(state.sessions["session-1"]?.turnIds).toEqual([])
         expect(state.sessions["session-1"]?.pendingInputIds).toEqual([])
         expect(state.sessions["session-1"]?.attention).toBe("none")
     })
