@@ -276,6 +276,27 @@ describe("cockpit projection", () => {
         expect(state.sessions["session-1"]?.pendingApprovalIds).toEqual(["approval-1"])
     })
 
+    it("preserves authoritative waiting snapshots before pending work arrives", () => {
+        const state = projectCockpitEvents([
+            {
+                kind: "session_hello",
+                session: baseSession,
+            },
+            {
+                kind: "session_status_changed",
+                sessionId: "session-1",
+                sessionEpoch: "epoch-1",
+                status: "waiting-for-input",
+                summary: "Waiting for a prompt event that has not arrived yet.",
+                updatedAt: "2026-04-27T16:04:30.000Z",
+            },
+        ])
+
+        expect(state.sessions["session-1"]?.status).toBe("waiting-for-input")
+        expect(state.sessions["session-1"]?.attention).toBe("input")
+        expect(state.sessions["session-1"]?.pendingInputIds).toEqual([])
+    })
+
     it("does not mark a session idle when a turn completes with pending work", () => {
         const state = projectCockpitEvents([
             {

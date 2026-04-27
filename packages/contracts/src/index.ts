@@ -351,7 +351,9 @@ export const projectCockpitEvent = (state: CockpitProjectionState, event: Cockpi
 
                 draft.sessions[event.sessionId] = withAttention({
                     ...session,
-                    status: statusWithPendingWork(session.status, pendingApprovalIds, session.pendingInputIds),
+                    status: statusWithPendingWork(session.status, pendingApprovalIds, session.pendingInputIds, {
+                        clearWaitingWhenNoPending: true,
+                    }),
                     updatedAt: event.resolvedAt,
                     pendingApprovalIds,
                 })
@@ -383,7 +385,9 @@ export const projectCockpitEvent = (state: CockpitProjectionState, event: Cockpi
 
                 draft.sessions[event.sessionId] = withAttention({
                     ...session,
-                    status: statusWithPendingWork(session.status, session.pendingApprovalIds, pendingInputIds),
+                    status: statusWithPendingWork(session.status, session.pendingApprovalIds, pendingInputIds, {
+                        clearWaitingWhenNoPending: true,
+                    }),
                     updatedAt: event.resolvedAt,
                     pendingInputIds,
                 })
@@ -534,6 +538,7 @@ const statusWithPendingWork = (
     baseStatus: SessionStatus,
     pendingApprovalIds: string[],
     pendingInputIds: string[],
+    options: { clearWaitingWhenNoPending?: boolean } = {},
 ): SessionStatus => {
     if (baseStatus === "blocked" || baseStatus === "error" || baseStatus === "ended") {
         return baseStatus
@@ -544,7 +549,7 @@ const statusWithPendingWork = (
     if (pendingInputIds.length > 0) {
         return "waiting-for-input"
     }
-    if (baseStatus === "waiting-for-approval" || baseStatus === "waiting-for-input") {
+    if (options.clearWaitingWhenNoPending && (baseStatus === "waiting-for-approval" || baseStatus === "waiting-for-input")) {
         return "idle"
     }
     return baseStatus
