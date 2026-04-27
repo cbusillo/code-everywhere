@@ -17,6 +17,9 @@
 
 ## Types
 
+- Prefer modern, clean TypeScript and JavaScript patterns supported by the repo's configured stable ECMAScript target.
+- Keep the toolchain on the latest stable ECMAScript target available to the pinned TypeScript version; reserve `ESNext` for deliberate proposal-level adoption.
+- Do not downlevel syntax or APIs out of habit. Choose older patterns only for readability, compatibility, or a concrete runtime constraint.
 - Type public APIs, exported functions, component props, and protocol/data shapes explicitly.
 - Prefer inference for obvious local variables.
 - Avoid `any`; use `unknown` at boundaries and narrow intentionally.
