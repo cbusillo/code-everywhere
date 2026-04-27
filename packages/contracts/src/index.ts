@@ -310,11 +310,14 @@ export const projectCockpitEvent = (state: CockpitProjectionState, event: Cockpi
                         }
                     }
 
-                    draft.sessions[event.sessionId] = withAttention({
+                    const nextSession = withAttention({
                         ...session,
                         status: turnStatusToSessionStatus(event.status),
+                        summary: event.summary ?? session.summary,
                         updatedAt: event.completedAt ?? session.updatedAt,
                     })
+                    draft.sessions[event.sessionId] = nextSession
+                    maybeNotifyForStatus(draft, nextSession, event.completedAt ?? session.updatedAt)
                 },
             )
         case "approval_requested":
@@ -340,11 +343,13 @@ export const projectCockpitEvent = (state: CockpitProjectionState, event: Cockpi
         case "approval_resolved":
             return withCurrentSession(state, eventScope(event, event.resolvedAt), (draft, session) => {
                 draft.pendingApprovals = omitRecordKey(draft.pendingApprovals, event.approvalId)
+                const pendingApprovalIds = session.pendingApprovalIds.filter((approvalId) => approvalId !== event.approvalId)
+
                 draft.sessions[event.sessionId] = withAttention({
                     ...session,
-                    status: session.status === "waiting-for-approval" ? "idle" : session.status,
+                    status: statusAfterPendingResolution(session.status, pendingApprovalIds, session.pendingInputIds),
                     updatedAt: event.resolvedAt,
-                    pendingApprovalIds: session.pendingApprovalIds.filter((approvalId) => approvalId !== event.approvalId),
+                    pendingApprovalIds,
                 })
             })
         case "user_input_requested":
@@ -370,11 +375,13 @@ export const projectCockpitEvent = (state: CockpitProjectionState, event: Cockpi
         case "user_input_resolved":
             return withCurrentSession(state, eventScope(event, event.resolvedAt), (draft, session) => {
                 draft.requestedInputs = omitRecordKey(draft.requestedInputs, event.inputId)
+                const pendingInputIds = session.pendingInputIds.filter((inputId) => inputId !== event.inputId)
+
                 draft.sessions[event.sessionId] = withAttention({
                     ...session,
-                    status: session.status === "waiting-for-input" ? "idle" : session.status,
+                    status: statusAfterPendingResolution(session.status, session.pendingApprovalIds, pendingInputIds),
                     updatedAt: event.resolvedAt,
-                    pendingInputIds: session.pendingInputIds.filter((inputId) => inputId !== event.inputId),
+                    pendingInputIds,
                 })
             })
     }
@@ -517,6 +524,23 @@ const turnStatusToSessionStatus = (status: TurnStatus): SessionStatus => {
         case "error":
             return "error"
     }
+}
+
+const statusAfterPendingResolution = (
+    currentStatus: SessionStatus,
+    pendingApprovalIds: string[],
+    pendingInputIds: string[],
+): SessionStatus => {
+    if (currentStatus !== "waiting-for-approval" && currentStatus !== "waiting-for-input") {
+        return currentStatus
+    }
+    if (pendingApprovalIds.length > 0) {
+        return "waiting-for-approval"
+    }
+    if (pendingInputIds.length > 0) {
+        return "waiting-for-input"
+    }
+    return "idle"
 }
 
 const appendUnique = <Value>(values: Value[], value: Value): Value[] => (values.includes(value) ? values : [...values, value])
