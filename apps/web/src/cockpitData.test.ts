@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { cockpitFixture, getAttentionSessions, statusLabels } from "./cockpitData"
+import { cockpitFixture, cockpitFixtureEvents, cockpitFixtureSnapshot, getAttentionSessions, statusLabels } from "./cockpitData"
 
 describe("cockpit fake data", () => {
     it("covers every required first-spike session state", () => {
@@ -21,6 +21,8 @@ describe("cockpit fake data", () => {
     it("derives UI sessions from projected contract state", () => {
         const approvalSession = cockpitFixture.sessions.find((session) => session.sessionId === "ce-alpha")
 
+        expect(cockpitFixtureSnapshot.eventCount).toBe(cockpitFixtureEvents.length)
+        expect(cockpitFixtureSnapshot.attentionSessionIds).toEqual(["ce-alpha", "ce-beta", "ce-delta", "ce-eta"])
         expect(approvalSession?.pendingApprovalIds).toEqual(["approval-install-deps"])
         expect(approvalSession?.pendingInputIds).toEqual([])
         expect(approvalSession?.currentTurnId).toBe("turn-alpha-3")

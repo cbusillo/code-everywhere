@@ -34,6 +34,9 @@ importers:
             "@code-everywhere/contracts":
                 specifier: workspace:*
                 version: link:../../packages/contracts
+            "@code-everywhere/server":
+                specifier: workspace:*
+                version: link:../../packages/server
             "@radix-ui/react-dialog":
                 specifier: latest
                 version: 1.1.15(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
