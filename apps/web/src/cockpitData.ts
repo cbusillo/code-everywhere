@@ -430,7 +430,7 @@ const createCockpitFixtureFromSnapshot = (fixture: SourceCockpitFixture, snapsho
         generatedAt: fixture.generatedAt,
         sessions: snapshot.sessions.map((session) => ({
             ...session,
-            currentTurnId: currentTurnIds.get(session.sessionId) ?? session.currentTurnId,
+            currentTurnId: getCurrentTurnId(currentTurnIds, session),
             unreadCount: unreadCounts.get(session.sessionId) ?? 0,
             turns: session.turnIds
                 .map((turnId) => snapshot.state.turns[turnId])
@@ -455,6 +455,14 @@ const toEveryCodeSession = (session: SourceCockpitSession): EveryCodeSession => 
     updatedAt: session.updatedAt,
     currentTurnId: session.currentTurnId,
 })
+
+const getCurrentTurnId = (currentTurnIds: Map<SessionId, SessionTurn["id"] | null>, session: ProjectedCockpitSession) => {
+    if (currentTurnIds.has(session.sessionId)) {
+        return currentTurnIds.get(session.sessionId) ?? null
+    }
+
+    return session.currentTurnId
+}
 
 export const cockpitFixtureEvents = createCockpitFixtureEvents(cockpitFixtureSource)
 export const cockpitFixtureStore = createCockpitEventStore(cockpitFixtureEvents)

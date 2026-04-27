@@ -160,6 +160,11 @@ describe("cockpit event store", () => {
         const snapshot = store.getSnapshot()
 
         snapshot.state.sessions["session-1"]?.pendingApprovalIds.push("mutated")
+        snapshot.sessions[0]?.pendingApprovalIds.push("snapshot-mutated")
+        const sourceHelloEvent = events[0]
+        if (sourceHelloEvent?.kind === "session_hello") {
+            sourceHelloEvent.session.summary = "mutated after ingest"
+        }
 
         const eventLog = store.getEvents()
         const helloEvent = eventLog[0]
@@ -168,6 +173,7 @@ describe("cockpit event store", () => {
         }
 
         expect(store.getSnapshot().state.sessions["session-1"]?.pendingApprovalIds).toEqual(["approval-1"])
+        expect(store.getSnapshot().sessions[0]?.pendingApprovalIds).toEqual(["approval-1"])
         const freshEventLog = store.getEvents()
         expect(freshEventLog[0]?.kind).toBe("session_hello")
         expect(freshEventLog[0]?.kind === "session_hello" ? freshEventLog[0].session.summary : null).toBe("Waiting for work")

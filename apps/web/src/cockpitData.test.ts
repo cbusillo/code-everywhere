@@ -20,12 +20,14 @@ describe("cockpit fake data", () => {
 
     it("derives UI sessions from projected contract state", () => {
         const approvalSession = cockpitFixture.sessions.find((session) => session.sessionId === "ce-alpha")
+        const endedSession = cockpitFixture.sessions.find((session) => session.sessionId === "ce-zeta")
 
         expect(cockpitFixtureSnapshot.eventCount).toBe(cockpitFixtureEvents.length)
         expect(cockpitFixtureSnapshot.attentionSessionIds).toEqual(["ce-alpha", "ce-beta", "ce-delta", "ce-eta"])
         expect(approvalSession?.pendingApprovalIds).toEqual(["approval-install-deps"])
         expect(approvalSession?.pendingInputIds).toEqual([])
         expect(approvalSession?.currentTurnId).toBe("turn-alpha-3")
+        expect(endedSession?.currentTurnId).toBeNull()
         expect(approvalSession?.turnIds).toEqual(["turn-alpha-1", "turn-alpha-2", "turn-alpha-3"])
         expect(approvalSession?.turns.map((turn) => turn.id)).toEqual(approvalSession?.turnIds)
     })

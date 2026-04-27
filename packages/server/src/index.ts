@@ -38,15 +38,17 @@ export const createCockpitEventStore = (initialEvents: CockpitProjectionEvent[] 
     const getSnapshot = (): CockpitIngestionSnapshot => createSnapshot(state, events.length)
 
     const ingest = (event: CockpitProjectionEvent): CockpitIngestionSnapshot => {
-        events = [...events, event]
-        state = projectCockpitEvent(state, event)
+        const eventCopy = cloneEvent(event)
+        events = [...events, eventCopy]
+        state = projectCockpitEvent(state, eventCopy)
         return getSnapshot()
     }
 
     const ingestMany = (nextEvents: CockpitProjectionEvent[]): CockpitIngestionSnapshot => {
         for (const event of nextEvents) {
-            events = [...events, event]
-            state = projectCockpitEvent(state, event)
+            const eventCopy = cloneEvent(event)
+            events = [...events, eventCopy]
+            state = projectCockpitEvent(state, eventCopy)
         }
         return getSnapshot()
     }
@@ -78,7 +80,7 @@ const createSnapshot = (state: CockpitProjectionState, eventCount: number): Cock
     return {
         eventCount,
         state: clonedState,
-        sessions: getProjectedSessions(clonedState),
+        sessions: getProjectedSessions(clonedState).map(cloneProjectedSession),
         attentionSessionIds: getAttentionSessionIds(clonedState),
     }
 }
