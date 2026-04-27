@@ -1,14 +1,28 @@
 import type {
+    CockpitProjectionEvent,
     EveryCodeSession,
     PendingApproval,
+    ProjectedCockpitSession,
     RequestedInput,
     SessionId,
     SessionStatus,
     SessionTurn,
 } from "@code-everywhere/contracts"
+import { getProjectedSessions, projectCockpitEvents } from "@code-everywhere/contracts"
 
-export type CockpitSession = EveryCodeSession & {
-    attention: "none" | "approval" | "input" | "blocked" | "error"
+type SourceCockpitSession = EveryCodeSession & {
+    unreadCount: number
+    turns: SessionTurn[]
+}
+
+type SourceCockpitFixture = {
+    generatedAt: string
+    sessions: SourceCockpitSession[]
+    approvals: PendingApproval[]
+    requestedInputs: RequestedInput[]
+}
+
+export type CockpitSession = ProjectedCockpitSession & {
     unreadCount: number
     turns: SessionTurn[]
 }
@@ -29,7 +43,7 @@ const sessionBase = {
     startedAt: "2026-04-27T15:18:00.000Z",
 }
 
-export const cockpitFixture: CockpitFixture = {
+const cockpitFixtureSource: SourceCockpitFixture = {
     generatedAt: "2026-04-27T16:05:00.000Z",
     sessions: [
         {
@@ -40,7 +54,6 @@ export const cockpitFixture: CockpitFixture = {
             summary: "Add fake-data cockpit spike and validate layout",
             updatedAt: "2026-04-27T16:04:12.000Z",
             currentTurnId: "turn-alpha-3",
-            attention: "approval",
             unreadCount: 3,
             turns: [
                 {
@@ -121,7 +134,6 @@ export const cockpitFixture: CockpitFixture = {
             summary: "Shape mobile-first requested-input behavior",
             updatedAt: "2026-04-27T16:02:18.000Z",
             currentTurnId: "turn-beta-2",
-            attention: "input",
             unreadCount: 1,
             turns: [
                 {
@@ -175,7 +187,6 @@ export const cockpitFixture: CockpitFixture = {
             summary: "Prototype projection helpers for trusted sessions",
             updatedAt: "2026-04-27T16:03:40.000Z",
             currentTurnId: "turn-gamma-1",
-            attention: "none",
             unreadCount: 0,
             turns: [
                 {
@@ -208,7 +219,6 @@ export const cockpitFixture: CockpitFixture = {
             summary: "Resolve stale epoch rejection copy",
             updatedAt: "2026-04-27T15:48:00.000Z",
             currentTurnId: "turn-delta-1",
-            attention: "blocked",
             unreadCount: 2,
             turns: [
                 {
@@ -241,7 +251,6 @@ export const cockpitFixture: CockpitFixture = {
             summary: "Waiting for the next operator reply",
             updatedAt: "2026-04-27T15:31:00.000Z",
             currentTurnId: null,
-            attention: "none",
             unreadCount: 0,
             turns: [
                 {
@@ -274,7 +283,6 @@ export const cockpitFixture: CockpitFixture = {
             summary: "Completed repo hygiene audit",
             updatedAt: "2026-04-27T14:54:00.000Z",
             currentTurnId: null,
-            attention: "none",
             unreadCount: 0,
             turns: [
                 {
@@ -307,7 +315,6 @@ export const cockpitFixture: CockpitFixture = {
             summary: "Failed while checking an unreachable local bridge",
             updatedAt: "2026-04-27T15:08:00.000Z",
             currentTurnId: "turn-eta-1",
-            attention: "error",
             unreadCount: 1,
             turns: [
                 {
@@ -383,6 +390,68 @@ export const cockpitFixture: CockpitFixture = {
         },
     ],
 }
+
+const projectCockpitFixture = (fixture: SourceCockpitFixture): CockpitFixture => {
+    const unreadCounts = new Map(fixture.sessions.map((session) => [session.sessionId, session.unreadCount]))
+    const events: CockpitProjectionEvent[] = [
+        ...fixture.sessions.flatMap<CockpitProjectionEvent>((session) => [
+            {
+                kind: "session_hello",
+                session: toEveryCodeSession(session),
+            },
+            ...session.turns.map<CockpitProjectionEvent>((turn) => ({
+                kind: "turn_started",
+                sessionEpoch: session.sessionEpoch,
+                turn,
+            })),
+        ]),
+        ...fixture.approvals.map<CockpitProjectionEvent>((approval) => ({
+            kind: "approval_requested",
+            approval,
+        })),
+        ...fixture.requestedInputs.map<CockpitProjectionEvent>((input) => ({
+            kind: "user_input_requested",
+            input,
+        })),
+        ...fixture.sessions.map<CockpitProjectionEvent>((session) => ({
+            kind: "session_status_changed",
+            sessionId: session.sessionId,
+            sessionEpoch: session.sessionEpoch,
+            status: session.status,
+            summary: session.summary,
+            updatedAt: session.updatedAt,
+        })),
+    ]
+    const state = projectCockpitEvents(events)
+
+    return {
+        generatedAt: fixture.generatedAt,
+        sessions: getProjectedSessions(state).map((session) => ({
+            ...session,
+            unreadCount: unreadCounts.get(session.sessionId) ?? 0,
+            turns: session.turnIds.map((turnId) => state.turns[turnId]).filter((turn): turn is SessionTurn => turn !== undefined),
+        })),
+        approvals: Object.values(state.pendingApprovals),
+        requestedInputs: Object.values(state.requestedInputs),
+    }
+}
+
+const toEveryCodeSession = (session: SourceCockpitSession): EveryCodeSession => ({
+    sessionId: session.sessionId,
+    sessionEpoch: session.sessionEpoch,
+    hostLabel: session.hostLabel,
+    cwd: session.cwd,
+    branch: session.branch,
+    pid: session.pid,
+    model: session.model,
+    status: session.status,
+    summary: session.summary,
+    startedAt: session.startedAt,
+    updatedAt: session.updatedAt,
+    currentTurnId: session.currentTurnId,
+})
+
+export const cockpitFixture: CockpitFixture = projectCockpitFixture(cockpitFixtureSource)
 
 export const statusLabels: Record<SessionStatus, string> = {
     running: "Running",
