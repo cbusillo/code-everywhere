@@ -6,6 +6,7 @@ Start here when opening the repo.
 - [Architecture](architecture.md) - expected system shape
 - [Every Code Integration](every-code-integration.md) - how this talks to Every Code
 - [Repository Settings](repo-settings.md) - GitHub, CI, Dependabot, branch protection
+- [UI References](ui-reference.md) - mature products and systems to use as UX references
 - [Code Style](style/coding-standards.md) - project-wide style rules
 - [TypeScript Style](style/typescript.md) - TypeScript and React rules
 - [Testing Style](style/testing.md) - test expectations
