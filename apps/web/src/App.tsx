@@ -42,21 +42,21 @@ const statusIcon: Record<SessionStatus, IconComponent> = {
 }
 
 const statusTone: Record<SessionStatus, string> = {
-    running: "text-emerald-700 bg-emerald-50 ring-emerald-200",
-    idle: "text-slate-600 bg-slate-100 ring-slate-200",
-    blocked: "text-amber-800 bg-amber-50 ring-amber-200",
-    "waiting-for-input": "text-sky-800 bg-sky-50 ring-sky-200",
-    "waiting-for-approval": "text-violet-800 bg-violet-50 ring-violet-200",
-    ended: "text-zinc-600 bg-zinc-100 ring-zinc-200",
-    error: "text-rose-800 bg-rose-50 ring-rose-200",
+    running: "is-running",
+    idle: "is-idle",
+    blocked: "is-blocked",
+    "waiting-for-input": "is-waiting-input",
+    "waiting-for-approval": "is-waiting-approval",
+    ended: "is-ended",
+    error: "is-error",
 }
 
 const stepTone: Record<TurnStep["state"], string> = {
-    pending: "border-slate-300 bg-slate-50 text-slate-600",
-    running: "border-emerald-300 bg-emerald-50 text-emerald-700",
-    completed: "border-slate-300 bg-white text-slate-600",
-    blocked: "border-amber-300 bg-amber-50 text-amber-800",
-    error: "border-rose-300 bg-rose-50 text-rose-800",
+    pending: "is-pending",
+    running: "is-running",
+    completed: "is-completed",
+    blocked: "is-blocked",
+    error: "is-error",
 }
 
 export const App = () => {
@@ -80,12 +80,12 @@ export const App = () => {
     }
 
     return (
-        <main className="min-h-screen bg-[#f7f8fb] text-slate-950">
-            <div className="mx-auto flex min-h-screen max-w-[1500px] flex-col px-4 py-4 lg:px-6">
+        <main className="app-shell">
+            <div className="app-frame">
                 <header className="cockpit-header">
                     <div>
                         <p className="eyebrow">Code Everywhere</p>
-                        <h1 className="text-2xl font-semibold tracking-normal text-slate-950">Every Code cockpit</h1>
+                        <h1>Every Code cockpit</h1>
                     </div>
                     <div className="header-actions">
                         <StatusSummary count={attentionSessions.length} />
@@ -141,16 +141,16 @@ const SessionList = ({ sessions, activeSessionId, onSelect }: SessionListProps) 
         <div className="session-stack">
             {sessions.map((session) => (
                 <button
-                    className={`session-row ${session.sessionId === activeSessionId ? "is-active" : ""}`}
+                    className={`session-row ${statusTone[session.status]} ${session.sessionId === activeSessionId ? "is-active" : ""}`}
                     key={session.sessionId}
                     type="button"
                     onClick={() => onSelect(session.sessionId)}
                 >
-                    <div className="session-row-top">
-                        <StatusPill status={session.status} compact />
-                        {session.unreadCount > 0 ? <span className="unread-count">{session.unreadCount}</span> : null}
-                    </div>
-                    <strong>{session.summary}</strong>
+                    <span className="status-dot" aria-hidden="true" />
+                    <span className="session-id">{session.sessionId}</span>
+                    <span className="session-title">{session.summary}</span>
+                    <span className="session-updated">{formatTime(session.updatedAt)}</span>
+                    <ChevronRight className="session-chevron" size={14} aria-hidden="true" />
                     <span className="session-meta">
                         {session.hostLabel} <span aria-hidden="true">/</span> {session.branch ?? "detached"}
                     </span>
@@ -171,11 +171,13 @@ const SessionDetail = ({ session, reply, setReply, logCommand }: SessionDetailPr
     <section className="panel detail-panel" aria-label="Active session detail">
         <div className="detail-header">
             <div className="detail-title-block">
-                <StatusPill status={session.status} />
+                <div className="detail-status-row">
+                    <StatusPill status={session.status} />
+                    <span className="session-id">{session.sessionId}</span>
+                    <span>epoch {session.sessionEpoch}</span>
+                </div>
                 <h2>{session.summary}</h2>
-                <p>
-                    Session {session.sessionId} is on epoch {session.sessionEpoch}. Last update {formatTime(session.updatedAt)}.
-                </p>
+                <p>Last update {formatTime(session.updatedAt)}. Commands attach to the current session epoch.</p>
             </div>
             <div className="session-actions" aria-label="Session commands">
                 <ActionButton icon={MessageSquareText} label="Status" onClick={() => logCommand("Status request")} />
@@ -207,7 +209,7 @@ const SessionDetail = ({ session, reply, setReply, logCommand }: SessionDetailPr
                     onClick={() => logCommand(reply.trim() === "" ? "Empty reply" : "Reply")}
                 >
                     <Send size={16} />
-                    Reply
+                    Send reply
                 </button>
             </div>
         </section>
@@ -371,6 +373,11 @@ const RequestedInputCard = ({ input, value, setValue, logCommand }: RequestedInp
 
 const TurnCard = ({ turn }: { turn: SessionTurn }) => (
     <article className="turn-card">
+        <div className="turn-rail">
+            <span
+                className={`step-dot ${stepTone[turn.status === "completed" ? "completed" : turn.status === "running" ? "running" : turn.status === "error" ? "error" : turn.status === "blocked" ? "blocked" : "pending"]}`}
+            />
+        </div>
         <div className="turn-header">
             <div>
                 <span className={`turn-status is-${turn.status}`}>{turn.status.replaceAll("-", " ")}</span>
@@ -399,6 +406,7 @@ const StatusPill = ({ status, compact = false }: { status: SessionStatus; compac
 
     return (
         <span className={`status-pill ${statusTone[status]} ${compact ? "is-compact" : ""}`}>
+            <span className="status-dot" aria-hidden="true" />
             <Icon size={compact ? 12 : 14} />
             {statusLabels[status]}
         </span>
