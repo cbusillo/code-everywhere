@@ -48,9 +48,18 @@ The server should normalize Every Code session events into client-facing state:
 - notification-worthy events
 - trusted devices and hosts
 
-The server may begin embedded in a local desktop process or as a small standalone service. Keep the client protocol stable enough that the deployment choice can evolve.
+The server may begin embedded in a local desktop process or as a small
+standalone service. Keep the client protocol stable enough that the deployment
+choice can evolve.
 
-The first server checkpoint lives in `packages/server`. It is intentionally in-memory: callers ingest typed cockpit projection events and read projected snapshots. It does not yet provide persistence, HTTP/WebSocket transport, authentication, command dispatch, or notification delivery.
+The first server checkpoint lives in `packages/server`. It is intentionally
+in-memory: callers ingest typed cockpit projection events and read projected
+snapshots.
+
+A lightweight local HTTP transport exposes snapshot, event-ingest, and reset
+endpoints for development and adapter spikes. It does not yet provide
+persistence, streaming, authentication, command dispatch, or notification
+delivery.
 
 ### Clients
 
