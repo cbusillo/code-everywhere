@@ -23,6 +23,7 @@ describe("cockpit fake data", () => {
 
         expect(approvalSession?.pendingApprovalIds).toEqual(["approval-install-deps"])
         expect(approvalSession?.pendingInputIds).toEqual([])
+        expect(approvalSession?.currentTurnId).toBe("turn-alpha-3")
         expect(approvalSession?.turnIds).toEqual(["turn-alpha-1", "turn-alpha-2", "turn-alpha-3"])
         expect(approvalSession?.turns.map((turn) => turn.id)).toEqual(approvalSession?.turnIds)
     })
