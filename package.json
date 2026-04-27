@@ -1,0 +1,26 @@
+{
+    "name": "code-everywhere",
+    "version": "0.0.0",
+    "private": true,
+    "type": "module",
+    "description": "A structured Apple-first control surface for Every Code sessions.",
+    "packageManager": "pnpm@10.10.0",
+    "scripts": {
+        "format": "prettier --write .",
+        "format:check": "prettier --check .",
+        "lint": "eslint .",
+        "lint:dry-run": "eslint . --fix-dry-run",
+        "typecheck": "pnpm --recursive typecheck",
+        "test": "pnpm --recursive test",
+        "validate": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test"
+    },
+    "devDependencies": {
+        "@eslint/js": "latest",
+        "@types/node": "latest",
+        "eslint": "latest",
+        "prettier": "latest",
+        "typescript": "latest",
+        "typescript-eslint": "latest",
+        "vitest": "latest"
+    }
+}
