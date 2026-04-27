@@ -14,7 +14,13 @@ The goal is not to put a terminal in a browser. The goal is a structured cockpit
 
 ## Current Status
 
-This repository is a new product shell. It intentionally starts with documentation, repo hygiene, and a small contracts package so we can build the first client deliberately.
+This repository is a new product shell. It currently has shared contracts, an in-memory server ingestion/projection package, and a fake-data web cockpit so we can build the first live bridge deliberately.
+
+Workspace packages:
+
+- `packages/contracts`: shared session, turn, approval, requested-input, command, and projection types/helpers.
+- `packages/server`: in-memory cockpit event ingestion and snapshot projection boundary.
+- `apps/web`: React/Vite cockpit UI for fake and projected session data.
 
 Useful entry points:
 
