@@ -312,7 +312,11 @@ export const projectCockpitEvent = (state: CockpitProjectionState, event: Cockpi
 
                     const nextSession = withAttention({
                         ...session,
-                        status: turnStatusToSessionStatus(event.status),
+                        status: statusWithPendingWork(
+                            turnStatusToSessionStatus(event.status),
+                            session.pendingApprovalIds,
+                            session.pendingInputIds,
+                        ),
                         summary: event.summary ?? session.summary,
                         updatedAt: event.completedAt ?? session.updatedAt,
                     })
@@ -347,7 +351,7 @@ export const projectCockpitEvent = (state: CockpitProjectionState, event: Cockpi
 
                 draft.sessions[event.sessionId] = withAttention({
                     ...session,
-                    status: statusAfterPendingResolution(session.status, pendingApprovalIds, session.pendingInputIds),
+                    status: statusWithPendingWork(session.status, pendingApprovalIds, session.pendingInputIds),
                     updatedAt: event.resolvedAt,
                     pendingApprovalIds,
                 })
@@ -379,7 +383,7 @@ export const projectCockpitEvent = (state: CockpitProjectionState, event: Cockpi
 
                 draft.sessions[event.sessionId] = withAttention({
                     ...session,
-                    status: statusAfterPendingResolution(session.status, session.pendingApprovalIds, pendingInputIds),
+                    status: statusWithPendingWork(session.status, session.pendingApprovalIds, pendingInputIds),
                     updatedAt: event.resolvedAt,
                     pendingInputIds,
                 })
@@ -401,14 +405,14 @@ const projectSessionHello = (state: CockpitProjectionState, session: EveryCodeSe
     const epochChanged = existing !== undefined && existing.sessionEpoch !== session.sessionEpoch
 
     if (epochChanged) {
-        removeSessionPendingItems(draft, session.sessionId)
+        removeSessionEpochItems(draft, session.sessionId)
     }
 
     draft.sessions[session.sessionId] = withAttention({
         ...session,
         pendingApprovalIds: epochChanged || existing === undefined ? [] : existing.pendingApprovalIds,
         pendingInputIds: epochChanged || existing === undefined ? [] : existing.pendingInputIds,
-        turnIds: existing?.turnIds ?? [],
+        turnIds: epochChanged || existing === undefined ? [] : existing.turnIds,
     })
 
     return draft
@@ -526,13 +530,13 @@ const turnStatusToSessionStatus = (status: TurnStatus): SessionStatus => {
     }
 }
 
-const statusAfterPendingResolution = (
-    currentStatus: SessionStatus,
+const statusWithPendingWork = (
+    baseStatus: SessionStatus,
     pendingApprovalIds: string[],
     pendingInputIds: string[],
 ): SessionStatus => {
-    if (currentStatus !== "waiting-for-approval" && currentStatus !== "waiting-for-input") {
-        return currentStatus
+    if (baseStatus === "blocked" || baseStatus === "error" || baseStatus === "ended") {
+        return baseStatus
     }
     if (pendingApprovalIds.length > 0) {
         return "waiting-for-approval"
@@ -540,7 +544,24 @@ const statusAfterPendingResolution = (
     if (pendingInputIds.length > 0) {
         return "waiting-for-input"
     }
-    return "idle"
+    if (baseStatus === "waiting-for-approval" || baseStatus === "waiting-for-input") {
+        return "idle"
+    }
+    return baseStatus
+}
+
+const removeSessionEpochItems = (state: CockpitProjectionState, sessionId: SessionId): void => {
+    removeSessionPendingItems(state, sessionId)
+    state.turns = Object.fromEntries(Object.entries(state.turns).filter(([, turn]) => turn.sessionId !== sessionId))
+}
+
+const removeSessionPendingItems = (state: CockpitProjectionState, sessionId: SessionId): void => {
+    state.pendingApprovals = Object.fromEntries(
+        Object.entries(state.pendingApprovals).filter(([, approval]) => approval.sessionId !== sessionId),
+    )
+    state.requestedInputs = Object.fromEntries(
+        Object.entries(state.requestedInputs).filter(([, input]) => input.sessionId !== sessionId),
+    )
 }
 
 const appendUnique = <Value>(values: Value[], value: Value): Value[] => (values.includes(value) ? values : [...values, value])
@@ -568,15 +589,6 @@ const maybeNotifyForStatus = (state: CockpitProjectionState, session: ProjectedC
 
 const sessionUpdatedAt = (state: CockpitProjectionState, sessionId: SessionId): string =>
     state.sessions[sessionId]?.updatedAt ?? new Date(0).toISOString()
-
-const removeSessionPendingItems = (state: CockpitProjectionState, sessionId: SessionId): void => {
-    state.pendingApprovals = Object.fromEntries(
-        Object.entries(state.pendingApprovals).filter(([, approval]) => approval.sessionId !== sessionId),
-    )
-    state.requestedInputs = Object.fromEntries(
-        Object.entries(state.requestedInputs).filter(([, input]) => input.sessionId !== sessionId),
-    )
-}
 
 const touchSession = (state: CockpitProjectionState, sessionId: SessionId, updatedAt: string): void => {
     const session = state.sessions[sessionId]
