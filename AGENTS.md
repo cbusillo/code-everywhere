@@ -20,7 +20,7 @@ Keep this file small. Put durable project knowledge in `docs/` and link to it fr
 
 ## Operating Rules
 
-- Keep living implementation plans in `/Users/cbusillo/.code/plans`, not in
+- Keep living implementation plans in `$HOME/.code/plans`, not in
   the repository. Add, update, and remove those plans as work evolves; only
   commit repo docs when behavior, architecture, commands, or product decisions
   change.

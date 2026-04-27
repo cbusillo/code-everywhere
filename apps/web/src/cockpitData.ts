@@ -22,7 +22,7 @@ export type CockpitFixture = {
 
 const sessionBase = {
     hostLabel: "Callisto MBP",
-    cwd: "/Users/cbusillo/Developer/code-everywhere",
+    cwd: "~/Developer/code-everywhere",
     branch: "main",
     pid: 41872,
     model: "code-gpt-5.4",
@@ -342,7 +342,7 @@ export const cockpitFixture: CockpitFixture = {
             title: "Install cockpit UI dependencies",
             body: "The session wants to add React, Vite, Tailwind, Radix Dialog, and lucide-react to the workspace.",
             command: "pnpm install",
-            cwd: "/Users/cbusillo/Developer/code-everywhere",
+            cwd: "~/Developer/code-everywhere",
             risk: "medium",
             requestedAt: "2026-04-27T15:42:00.000Z",
         },
