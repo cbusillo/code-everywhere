@@ -1,5 +1,5 @@
 import * as Dialog from "@radix-ui/react-dialog"
-import type { PendingApproval, RequestedInput, SessionStatus, SessionTurn, TurnStep } from "@code-everywhere/contracts"
+import type { PendingApproval, RequestedInput, SessionStatus, SessionTurn, TurnStatus, TurnStep } from "@code-everywhere/contracts"
 import {
     AlertCircle,
     Bell,
@@ -59,6 +59,15 @@ const stepTone: Record<TurnStep["state"], string> = {
     error: "is-error",
 }
 
+const turnRailTone: Record<TurnStatus, string> = {
+    running: "is-running",
+    completed: "is-completed",
+    blocked: "is-blocked",
+    "waiting-for-input": "is-waiting-input",
+    "waiting-for-approval": "is-waiting-approval",
+    error: "is-error",
+}
+
 export const App = () => {
     const [activeSessionId, setActiveSessionId] = useState(selectedSessionId)
     const [reply, setReply] = useState("")
@@ -85,7 +94,6 @@ export const App = () => {
                 <header className="cockpit-header">
                     <div>
                         <p className="eyebrow">Code Everywhere</p>
-                        <h1>Every Code cockpit</h1>
                     </div>
                     <div className="header-actions">
                         <StatusSummary count={attentionSessions.length} />
@@ -149,6 +157,7 @@ const SessionList = ({ sessions, activeSessionId, onSelect }: SessionListProps) 
                     <span className="status-dot" aria-hidden="true" />
                     <span className="session-id">{session.sessionId}</span>
                     <span className="session-title">{session.summary}</span>
+                    <StatusPill status={session.status} compact />
                     <span className="session-updated">{formatTime(session.updatedAt)}</span>
                     <ChevronRight className="session-chevron" size={14} aria-hidden="true" />
                     <span className="session-meta">
@@ -209,7 +218,7 @@ const SessionDetail = ({ session, reply, setReply, logCommand }: SessionDetailPr
                     onClick={() => logCommand(reply.trim() === "" ? "Empty reply" : "Reply")}
                 >
                     <Send size={16} />
-                    Send reply
+                    Send
                 </button>
             </div>
         </section>
@@ -374,9 +383,7 @@ const RequestedInputCard = ({ input, value, setValue, logCommand }: RequestedInp
 const TurnCard = ({ turn }: { turn: SessionTurn }) => (
     <article className="turn-card">
         <div className="turn-rail">
-            <span
-                className={`step-dot ${stepTone[turn.status === "completed" ? "completed" : turn.status === "running" ? "running" : turn.status === "error" ? "error" : turn.status === "blocked" ? "blocked" : "pending"]}`}
-            />
+            <span className={`step-dot ${turnRailTone[turn.status]}`} />
         </div>
         <div className="turn-header">
             <div>

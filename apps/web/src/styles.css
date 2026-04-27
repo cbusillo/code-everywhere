@@ -88,19 +88,11 @@ button {
 
 .cockpit-header {
     display: flex;
-    min-height: 48px;
+    min-height: 36px;
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    padding: 0 2px 10px;
-}
-
-.cockpit-header h1 {
-    margin: 2px 0 0;
-    font-size: 20px;
-    font-weight: 650;
-    letter-spacing: 0;
-    line-height: 1.2;
+    padding: 0 2px 8px;
 }
 
 .header-actions,
@@ -179,10 +171,10 @@ button {
     display: grid;
     width: 100%;
     min-height: 58px;
-    grid-template-columns: 8px 54px minmax(0, 1fr) 38px 12px;
+    grid-template-columns: 8px 54px minmax(0, 1fr) auto 38px 12px;
     grid-template-areas:
-        "dot id title time chevron"
-        ". . meta meta chevron";
+        "dot id title pill time chevron"
+        ". . meta meta meta chevron";
     align-items: center;
     gap: 6px;
     border: 0;
@@ -302,6 +294,10 @@ code {
 
 .session-row > .status-dot {
     grid-area: dot;
+}
+
+.session-row > .status-pill {
+    grid-area: pill;
 }
 
 .detail-panel {
@@ -810,11 +806,13 @@ legend {
 }
 
 .status-pill.is-waiting-approval .status-dot,
+.step-dot.is-waiting-approval,
 .session-row.is-waiting-approval > .status-dot {
     background: var(--warning);
 }
 
 .status-pill.is-waiting-input .status-dot,
+.step-dot.is-waiting-input,
 .session-row.is-waiting-input > .status-dot {
     background: var(--info);
 }
@@ -1059,17 +1057,199 @@ legend {
 @media (max-width: 980px) {
     .cockpit-grid {
         grid-template-columns: minmax(200px, 0.7fr) minmax(0, 1.4fr);
+        min-height: auto;
+        align-items: start;
     }
 
     .action-rail {
         grid-column: 1 / -1;
-        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        grid-template-columns: minmax(0, 1.05fr) minmax(280px, 0.95fr);
         max-height: none;
+        align-items: start;
         border-top: 1px solid var(--border-default);
+        padding: 12px;
+    }
+
+    .work-panel {
+        align-self: start;
     }
 
     .detail-panel {
+        max-height: none;
         border-right: 0;
+    }
+
+    .cockpit-header {
+        min-height: 32px;
+        padding-bottom: 6px;
+    }
+
+    .status-summary {
+        padding: 4px 8px 4px 4px;
+    }
+
+    .detail-header {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 10px;
+        padding: 10px 16px;
+    }
+
+    .detail-title-block h2 {
+        margin-top: 7px;
+        font-size: 19px;
+        line-height: 1.18;
+    }
+
+    .detail-title-block p {
+        max-width: 34rem;
+        font-size: 11.5px;
+        line-height: 1.35;
+    }
+
+    .detail-status-row {
+        gap: 6px;
+    }
+
+    .session-actions {
+        display: grid;
+        min-width: 174px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px;
+    }
+
+    .session-actions .quiet-button {
+        min-height: 30px;
+        padding: 0 8px;
+        font-size: 12px;
+    }
+
+    .metadata-strip {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .metadata-item {
+        gap: 2px;
+        padding: 8px 12px;
+    }
+
+    .metadata-item svg {
+        display: none;
+    }
+
+    .metadata-item span {
+        font-size: 9.5px;
+    }
+
+    .metadata-item strong {
+        font-size: 11px;
+    }
+
+    .session-list {
+        align-self: start;
+    }
+
+    .session-row {
+        min-height: 70px;
+        grid-template-columns: 8px minmax(0, 1fr) 42px 12px;
+        grid-template-areas:
+            "dot id time chevron"
+            ". title title chevron"
+            ". pill meta chevron";
+        align-items: start;
+        padding: 8px;
+    }
+
+    .session-row > .status-dot {
+        margin-top: 4px;
+    }
+
+    .session-title {
+        white-space: nowrap;
+    }
+
+    .session-row > .status-pill {
+        justify-self: start;
+        max-width: 122px;
+    }
+
+    .status-pill.is-compact {
+        max-width: 122px;
+    }
+
+    .session-meta {
+        justify-self: end;
+        max-width: 112px;
+    }
+
+    .reply-box {
+        padding: 10px 16px 12px;
+    }
+
+    .reply-row {
+        align-items: end;
+    }
+
+    .reply-row textarea {
+        min-height: 48px;
+    }
+
+    .reply-row .primary-button {
+        width: 72px;
+        min-height: 36px;
+        align-self: end;
+    }
+
+    .work-panel > .panel-heading {
+        padding-bottom: 7px;
+    }
+
+    .decision-card {
+        gap: 8px;
+        margin-top: 8px;
+        padding: 10px 12px 10px 14px;
+    }
+
+    .decision-title h3 {
+        font-size: 13px;
+    }
+
+    .decision-card > p {
+        font-size: 11.5px;
+        line-height: 1.35;
+    }
+
+    .choice-row {
+        padding: 7px 8px;
+    }
+
+    .choice-row small {
+        font-size: 11px;
+    }
+
+    .input-card textarea {
+        min-height: 42px;
+    }
+
+    .input-card .primary-button.full-width {
+        min-height: 34px;
+    }
+
+    .command-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 6px;
+    }
+
+    .command-grid .quiet-button {
+        min-width: 0;
+        padding: 0 8px;
+        font-size: 12px;
+    }
+
+    .mock-log,
+    .epoch-note {
+        padding: 9px;
     }
 }
 
