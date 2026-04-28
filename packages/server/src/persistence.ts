@@ -11,6 +11,7 @@ import {
     type CockpitEventStore,
 } from "./index.js"
 import { isCockpitProjectionEvent, isSessionCommand } from "./http.js"
+import { compactCockpitEvents, defaultCockpitEventRetentionPolicy, type CockpitEventRetentionPolicy } from "./retention.js"
 
 export type CockpitPersistenceSnapshot = {
     version: 1
@@ -25,6 +26,7 @@ export type PersistentCockpitStores = {
 
 export type CockpitPersistenceOptions = {
     writeSnapshot?: (filePath: string, snapshot: CockpitPersistenceSnapshot) => void
+    eventRetentionPolicy?: CockpitEventRetentionPolicy | null
 }
 
 export class CockpitPersistenceError extends Error {}
@@ -40,6 +42,8 @@ export const createPersistentCockpitStores = (
     options: CockpitPersistenceOptions = {},
 ): PersistentCockpitStores => {
     const writeSnapshot = options.writeSnapshot ?? writeCockpitPersistenceFile
+    const eventRetentionPolicy =
+        options.eventRetentionPolicy === undefined ? defaultCockpitEventRetentionPolicy : options.eventRetentionPolicy
     const snapshot = readCockpitPersistenceFile(filePath)
     let eventStore = createCockpitEventStore(snapshot.events)
     let commandStore = createCockpitCommandStore([], { initialRecords: snapshot.commands })
@@ -49,18 +53,26 @@ export const createPersistentCockpitStores = (
         commandStore = createCockpitCommandStore([], { initialRecords: previousSnapshot.commands })
     }
 
-    const currentSnapshot = (): CockpitPersistenceSnapshot => ({
+    const rawSnapshot = (): CockpitPersistenceSnapshot => ({
         version: 1,
         events: eventStore.getEvents(),
         commands: commandStore.getCommands(),
     })
+
+    const currentSnapshot = (): CockpitPersistenceSnapshot => {
+        const snapshot = rawSnapshot()
+        return {
+            ...snapshot,
+            events: eventRetentionPolicy === null ? snapshot.events : compactCockpitEvents(snapshot.events, eventRetentionPolicy),
+        }
+    }
 
     const persist = (): void => {
         writeSnapshot(filePath, currentSnapshot())
     }
 
     const persistOrRollback = <Value>(mutate: () => Value): Value => {
-        const previousSnapshot = currentSnapshot()
+        const previousSnapshot = rawSnapshot()
 
         try {
             const value = mutate()
