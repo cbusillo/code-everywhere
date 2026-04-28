@@ -21,13 +21,15 @@ const run = async () => {
         await postJson(`${url}/events`, { events: createTurnLifecycleEvents() })
         const snapshot = await getJson(`${url}/snapshot`)
 
-        assertEqual(snapshot.eventCount, 4, "event count")
+        assertEqual(snapshot.eventCount, 5, "event count")
         assertEqual(snapshot.sessions[0]?.sessionId, "smoke-session", "session id")
         assertEqual(snapshot.sessions[0]?.status, "idle", "session status")
         assertEqual(snapshot.sessions[0]?.currentTurnId, "smoke-turn", "current turn id")
         assertEqual(snapshot.state.turns["smoke-turn"]?.status, "completed", "turn status")
-        assertEqual(snapshot.state.turns["smoke-turn"]?.steps.length, 1, "turn step count")
-        assertEqual(snapshot.state.turns["smoke-turn"]?.steps[0]?.detail, "Smoke turn complete.", "assistant message")
+        assertEqual(snapshot.state.turns["smoke-turn"]?.steps.length, 2, "turn step count")
+        assertEqual(snapshot.state.turns["smoke-turn"]?.steps[0]?.title, "Shell command", "tool step title")
+        assertEqual(snapshot.state.turns["smoke-turn"]?.steps[0]?.state, "completed", "tool step state")
+        assertEqual(snapshot.state.turns["smoke-turn"]?.steps[1]?.detail, "Smoke turn complete.", "assistant message")
 
         stdout.write(`Cockpit turn lifecycle smoke passed at ${url}\n`)
     } catch (error) {
@@ -173,11 +175,25 @@ const createTurnLifecycleEvents = () => [
         sessionEpoch: "smoke-epoch",
         turnId: "smoke-turn",
         step: {
+            id: "smoke-turn:tool:exec-1",
+            kind: "tool",
+            title: "Shell command",
+            detail: "pnpm test\nExited with code 0 after 0.2s.",
+            timestamp: "2026-04-28T12:00:02.000Z",
+            state: "completed",
+        },
+    },
+    {
+        kind: "turn_step_added",
+        sessionId: "smoke-session",
+        sessionEpoch: "smoke-epoch",
+        turnId: "smoke-turn",
+        step: {
             id: "smoke-turn:assistant-message",
             kind: "message",
             title: "Assistant message",
             detail: "Smoke turn complete.",
-            timestamp: "2026-04-28T12:00:02.000Z",
+            timestamp: "2026-04-28T12:00:03.000Z",
             state: "completed",
         },
     },
@@ -188,7 +204,7 @@ const createTurnLifecycleEvents = () => [
         turnId: "smoke-turn",
         status: "completed",
         summary: "Turn complete.",
-        completedAt: "2026-04-28T12:00:03.000Z",
+        completedAt: "2026-04-28T12:00:04.000Z",
     },
 ]
 
