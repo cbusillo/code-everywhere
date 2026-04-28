@@ -3,10 +3,12 @@ import { env, stderr, stdout } from "node:process"
 import { pathToFileURL } from "node:url"
 
 import { createCockpitHttpServer } from "./http.js"
+import { createPersistentCockpitStores } from "./persistence.js"
 
 export type CockpitServerCliOptions = {
     host: string
     port: number
+    dataFile: string | null
     help: boolean
 }
 
@@ -17,23 +19,27 @@ export type RunningCockpitServer = {
 
 const defaultHost = "127.0.0.1"
 const defaultPort = 4789
+const defaultDataFile = ".code-everywhere/cockpit-broker.json"
 
 export class CockpitServerCliError extends Error {}
 
 export const formatCockpitServerHelp = (): string => `Code Everywhere cockpit HTTP server
 
 Usage:
-  pnpm cockpit:server [--host 127.0.0.1] [--port 4789]
+  pnpm cockpit:server [--host 127.0.0.1] [--port 4789] [--data-file .code-everywhere/cockpit-broker.json]
 
 Options:
-  --host <host>  Bind address. Defaults to CODE_EVERYWHERE_HOST or ${defaultHost}.
-  --port <port>  Bind port. Defaults to CODE_EVERYWHERE_PORT or ${String(defaultPort)}.
-  -h, --help     Show this help.
+  --host <host>            Bind address. Defaults to CODE_EVERYWHERE_HOST or ${defaultHost}.
+  --port <port>            Bind port. Defaults to CODE_EVERYWHERE_PORT or ${String(defaultPort)}.
+  --data-file <path>       Persistence file. Defaults to CODE_EVERYWHERE_DATA_FILE or ${defaultDataFile}.
+  --memory                 Disable file persistence for this run.
+  -h, --help               Show this help.
 `
 
 export const parseCockpitServerArgs = (args: readonly string[], variables: NodeJS.ProcessEnv = env): CockpitServerCliOptions => {
     let host = normalizeHost(variables.CODE_EVERYWHERE_HOST) ?? defaultHost
     let port: number | undefined
+    let dataFile: string | null = normalizeValue(variables.CODE_EVERYWHERE_DATA_FILE) ?? defaultDataFile
     let help = false
 
     for (let index = 0; index < args.length; index += 1) {
@@ -70,10 +76,31 @@ export const parseCockpitServerArgs = (args: readonly string[], variables: NodeJ
             continue
         }
 
+        if (arg === "--data-file") {
+            dataFile = readOptionValue(args, index, "--data-file")
+            index += 1
+            continue
+        }
+
+        if (arg?.startsWith("--data-file=")) {
+            dataFile = requireNonEmptyValue(arg.slice("--data-file=".length), "--data-file")
+            continue
+        }
+
+        if (arg === "--memory") {
+            dataFile = null
+            continue
+        }
+
         throw new CockpitServerCliError(`Unknown option: ${arg ?? ""}`)
     }
 
-    return { host, port: port ?? parsePort(variables.CODE_EVERYWHERE_PORT, "CODE_EVERYWHERE_PORT") ?? defaultPort, help }
+    return {
+        host,
+        port: port ?? parsePort(variables.CODE_EVERYWHERE_PORT, "CODE_EVERYWHERE_PORT") ?? defaultPort,
+        dataFile,
+        help,
+    }
 }
 
 export const cockpitServerUrl = (host: string, port: number): string => {
@@ -83,9 +110,11 @@ export const cockpitServerUrl = (host: string, port: number): string => {
 }
 
 export const startCockpitHttpServer = async (
-    options: Pick<CockpitServerCliOptions, "host" | "port">,
+    options: Pick<CockpitServerCliOptions, "host" | "port"> & { dataFile?: string | null },
 ): Promise<RunningCockpitServer> => {
-    const server = createCockpitHttpServer()
+    const stores =
+        options.dataFile === undefined || options.dataFile === null ? undefined : createPersistentCockpitStores(options.dataFile)
+    const server = createCockpitHttpServer(stores)
     await new Promise<void>((resolve, reject) => {
         const onError = (error: Error) => {
             server.off("listening", onListening)
@@ -124,6 +153,9 @@ export const runCockpitServerCli = async (
 
         const running = await startCockpitHttpServer(options)
         stdout.write(`Code Everywhere cockpit HTTP server listening at ${running.url}\n`)
+        if (options.dataFile !== null) {
+            stdout.write(`Persisting broker state to ${options.dataFile}\n`)
+        }
         stdout.write(`Use VITE_COCKPIT_HTTP_URL=${running.url} for the web cockpit.\n`)
         return 0
     } catch (error: unknown) {
@@ -133,7 +165,11 @@ export const runCockpitServerCli = async (
 }
 
 const normalizeHost = (host: string | undefined): string | undefined => {
-    const normalized = host?.trim()
+    return normalizeValue(host)
+}
+
+const normalizeValue = (value: string | undefined): string | undefined => {
+    const normalized = value?.trim()
     return normalized === undefined || normalized === "" ? undefined : normalized
 }
 

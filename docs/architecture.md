@@ -62,7 +62,8 @@ clients enqueue operator actions with `POST /commands`; a local Every Code
 adapter can claim undelivered commands with `POST /commands/claim`, optionally
 filtered by `sessionId`, which marks those commands delivered before returning
 them. The adapter reports runtime acceptance or rejection with `command_outcome`
-projection events. It does not yet provide persistence, streaming,
+projection events. The local broker persists its event log and command records
+to a repo-ignored JSON file by default. It does not yet provide streaming,
 authentication, direct runtime command execution, or notification delivery.
 
 ### Clients

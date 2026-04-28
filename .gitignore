@@ -4,6 +4,7 @@ dist/
 coverage/
 .turbo/
 .vite/
+.code-everywhere/
 .env
 .env.*
 !.env.example

@@ -60,6 +60,9 @@ Every Code adapter that consumes them:
 
 - start the local broker with `pnpm cockpit:server`; it listens on
   `http://127.0.0.1:4789` by default
+- the broker persists local state to `.code-everywhere/cockpit-broker.json` by
+  default; pass `--memory` for an ephemeral run or `--data-file <path>` to use a
+  different file
 - web and native clients enqueue operator actions with `POST /commands`
 - local adapters claim undelivered work with `POST /commands/claim`
 - `POST /commands/claim` accepts an optional `sessionId` filter and marks
