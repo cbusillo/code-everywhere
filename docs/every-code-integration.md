@@ -105,6 +105,31 @@ real browser, enqueues a status command from the cockpit, stops the broker to
 confirm HTTP fallback, then restarts the broker and verifies live recovery. It
 requires the local `ui-browser` helper.
 
+To verify retained/pruned broker state in the browser, run:
+
+```sh
+pnpm smoke:cockpit:retained-pruned
+```
+
+That smoke seeds a persistent broker with high-volume and stale-epoch events,
+restarts the broker from compacted JSON, verifies the retained projection, opens
+the web cockpit in a browser, checks post-pruning rendering and fallback copy,
+and asserts no horizontal overflow in desktop and constrained-width layouts.
+
+To exercise the local broker and web cockpit with a real trusted Every Code TUI,
+run:
+
+```sh
+pnpm smoke:cockpit:real-tui
+```
+
+That smoke starts a real interactive `code` TUI with Code Everywhere HTTP
+enabled, waits for its `session_hello`, verifies it in the web cockpit, sends a
+status command from the browser, and waits for the TUI to publish the accepted
+command outcome. It requires `code`, `expect`, and `ui-browser` on `PATH`. Set
+`CODE_EVERYWHERE_CODE_BINARY=/absolute/path/to/code` to test a specific local
+Every Code build when multiple `code` binaries are installed.
+
 For the full live Every Code loop:
 
 1. Start the cockpit server with `pnpm cockpit:server`.

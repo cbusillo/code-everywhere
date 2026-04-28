@@ -1,4 +1,7 @@
 import { randomUUID } from "node:crypto"
+import { mkdtemp, readFile, rm } from "node:fs/promises"
+import { join } from "node:path"
+import { tmpdir } from "node:os"
 
 import { describe, expect, it } from "vitest"
 
@@ -143,6 +146,89 @@ describe("cockpit persistence wrapper", () => {
         expect(replayedState.pendingApprovals["approval-1"]).toEqual(baseApproval)
         expect(replayedState.turns["turn-1"]?.steps.map((candidate) => candidate.id)).toEqual(["step-3", "approval:approval-1"])
     })
+
+    it("replays reconnect state while preserving stale evidence and command outcomes", async () => {
+        const directory = await mkdtemp(join(tmpdir(), "code-everywhere-persistence-"))
+        const filePath = join(directory, "broker.json")
+
+        try {
+            const stores = createPersistentCockpitStores(filePath, {
+                eventRetentionPolicy: {
+                    maxEndedSessions: 0,
+                    maxTurnsPerSession: 1,
+                    maxStepsPerTurn: 3,
+                    maxCommandOutcomes: 5,
+                    maxStaleEvents: 5,
+                },
+            })
+
+            stores.store.ingest({
+                kind: "session_hello",
+                session: baseSession,
+            })
+            stores.commandStore.enqueue(baseCommand)
+            const claim = stores.commandStore.claimUndelivered({ sessionId: "session-1" })
+            stores.store.ingest({
+                kind: "session_hello",
+                session: {
+                    ...baseSession,
+                    sessionEpoch: "epoch-2",
+                    updatedAt: "2026-04-27T16:10:00.000Z",
+                },
+            })
+            stores.store.ingest(commandOutcome(claim.commands[0]?.id ?? "command-1", "epoch-1", "2026-04-27T16:11:00.000Z"))
+
+            const reconnectedStores = createPersistentCockpitStores(filePath, {
+                eventRetentionPolicy: {
+                    maxEndedSessions: 0,
+                    maxTurnsPerSession: 1,
+                    maxStepsPerTurn: 3,
+                    maxCommandOutcomes: 5,
+                    maxStaleEvents: 5,
+                },
+            })
+            const replayedSnapshot = reconnectedStores.store.getSnapshot()
+
+            expect(replayedSnapshot.sessions[0]).toMatchObject({
+                sessionId: "session-1",
+                sessionEpoch: "epoch-2",
+            })
+            expect(replayedSnapshot.state.staleEvents).toEqual([
+                {
+                    eventKind: "command_outcome",
+                    sessionId: "session-1",
+                    eventEpoch: "epoch-1",
+                    currentEpoch: "epoch-2",
+                    receivedAt: "2026-04-27T16:11:00.000Z",
+                },
+            ])
+            expect(reconnectedStores.commandStore.getCommands()[0]).toMatchObject({
+                id: claim.commands[0]?.id,
+            })
+            expect(reconnectedStores.commandStore.getCommands()[0]?.deliveredAt).not.toBeNull()
+
+            reconnectedStores.store.ingest(commandOutcome("command-2", "epoch-2", "2026-04-27T16:12:00.000Z"))
+
+            const finalSnapshot = createPersistentCockpitStores(filePath, {
+                eventRetentionPolicy: {
+                    maxEndedSessions: 0,
+                    maxTurnsPerSession: 1,
+                    maxStepsPerTurn: 3,
+                    maxCommandOutcomes: 5,
+                    maxStaleEvents: 5,
+                },
+            }).store.getSnapshot()
+            const persisted = JSON.parse(await readFile(filePath, "utf8")) as { events: CockpitProjectionEvent[] }
+
+            expect(finalSnapshot.state.commandOutcomes["command-2"]).toMatchObject({
+                sessionEpoch: "epoch-2",
+                status: "accepted",
+            })
+            expect(projectCockpitEvents(persisted.events).sessions["session-1"]?.sessionEpoch).toBe("epoch-2")
+        } finally {
+            await rm(directory, { recursive: true, force: true })
+        }
+    })
 })
 
 const unusedPath = (): string => `/tmp/code-everywhere-unused-${String(process.pid)}-${randomUUID()}.json`
@@ -166,4 +252,17 @@ const step = (id: string): TurnStep => ({
     detail: "pnpm test",
     timestamp: `2026-04-27T16:02:0${id.charAt(id.length - 1)}.000Z`,
     state: "completed",
+})
+
+const commandOutcome = (commandId: string, sessionEpoch: string, handledAt: string): CockpitProjectionEvent => ({
+    kind: "command_outcome",
+    outcome: {
+        commandId,
+        sessionId: "session-1",
+        sessionEpoch,
+        commandKind: "status_request",
+        status: "accepted",
+        reason: null,
+        handledAt,
+    },
 })
