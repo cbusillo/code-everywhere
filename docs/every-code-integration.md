@@ -83,6 +83,18 @@ session actually handled them.
 
 ## Local Smoke Loop
 
+For a quick broker/projection check without launching a TUI, run:
+
+```sh
+pnpm smoke:cockpit:turns
+```
+
+That smoke starts an in-memory local broker, publishes a live-shaped session
+hello, turn start, assistant message step, and turn completion, then verifies
+the projected snapshot.
+
+For the full live Every Code loop:
+
 1. Start the cockpit server with `pnpm cockpit:server`.
 2. Start the web cockpit with:
 
@@ -98,5 +110,6 @@ session actually handled them.
     ```
 
 4. Launch `code` and confirm the session appears in the web cockpit.
-5. Exercise reply, status, approval, and requested-input commands from the web
+5. Start a turn and confirm the web cockpit shows the live turn timeline.
+6. Exercise reply, status, approval, and requested-input commands from the web
    cockpit and confirm they are claimed by the active Every Code session.
