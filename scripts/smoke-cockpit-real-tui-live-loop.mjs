@@ -5,7 +5,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { spawn } from "node:child_process"
 import { createServer } from "node:net"
-import { exit, kill as killProcess, platform, stderr, stdout } from "node:process"
+import { kill as killProcess, platform, stderr, stdout } from "node:process"
 import { setTimeout as delay } from "node:timers/promises"
 
 const smokePollIntervalMs = 500
@@ -85,7 +85,7 @@ const run = async () => {
         if (tui !== null) {
             writeProcessLogs("TUI", tui)
         }
-        exit(1)
+        process.exitCode = 1
     } finally {
         await ui(uiBrowser, session, ["close"]).catch(() => undefined)
         if (tui !== null) {
