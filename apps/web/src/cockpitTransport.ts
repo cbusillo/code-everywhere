@@ -232,7 +232,7 @@ export function normalizePollIntervalMs(value: string | undefined): number | nul
     }
 
     const pollIntervalMs = Number(normalized)
-    return Number.isFinite(pollIntervalMs) && pollIntervalMs > 0 ? Math.floor(pollIntervalMs) : null
+    return Number.isFinite(pollIntervalMs) && pollIntervalMs >= 1 ? Math.floor(pollIntervalMs) : null
 }
 
 export const describeTransportStatus = (status: CockpitTransportStatus): string => {

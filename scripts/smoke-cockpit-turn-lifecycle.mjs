@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { spawn } from "node:child_process"
-import { exit, kill as killProcess, platform, stderr, stdout } from "node:process"
+import { kill as killProcess, platform, stderr, stdout } from "node:process"
 import { setTimeout as delay } from "node:timers/promises"
 
 const serverReadyPattern = /listening at (http:\/\/\S+)/
@@ -45,7 +45,7 @@ const run = async () => {
         if (logs.trim() !== "") {
             stderr.write(`\nServer output:\n${logs}`)
         }
-        exit(1)
+        process.exitCode = 1
     } finally {
         await stopServer(server)
     }

@@ -28,6 +28,7 @@ describe("cockpit HTTP transport client", () => {
         expect(normalizePollIntervalMs("500")).toBe(500)
         expect(normalizePollIntervalMs("250.9")).toBe(250)
         expect(normalizePollIntervalMs("0")).toBeNull()
+        expect(normalizePollIntervalMs("0.5")).toBeNull()
         expect(normalizePollIntervalMs("nope")).toBeNull()
     })
 
