@@ -266,6 +266,22 @@ describe("cockpit HTTP transport", () => {
                 decision: "maybe",
                 resolvedAt: "2026-04-27T16:05:00.000Z",
             },
+            {
+                kind: "session_status_changed",
+                sessionId: "session-1",
+                sessionEpoch: "epoch-1",
+                status: "running",
+                summary: 42,
+                updatedAt: "2026-04-27T16:06:00.000Z",
+            },
+            {
+                kind: "turn_status_changed",
+                sessionId: "session-1",
+                sessionEpoch: "epoch-1",
+                turnId: "turn-1",
+                status: "completed",
+                completedAt: 42,
+            },
         ]
 
         for (const event of invalidEvents) {

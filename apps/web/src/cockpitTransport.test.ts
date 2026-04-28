@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import { cockpitFixtureSnapshot, createCockpitFixtureFromSnapshot } from "./cockpitData"
 import {
-    createCockpitPollRequestTracker,
+    createCockpitPollScheduler,
     createSnapshotUrl,
     describeTransportStatus,
     fetchCockpitSnapshot,
@@ -57,13 +57,40 @@ describe("cockpit HTTP transport client", () => {
         })
     })
 
-    it("tracks only the latest poll request as current", () => {
-        const tracker = createCockpitPollRequestTracker()
-        const firstRequest = tracker.startRequest()
-        const secondRequest = tracker.startRequest()
+    it("schedules the next poll only after the current request finishes", async () => {
+        const scheduledPolls: (() => void)[] = []
+        const originalSetTimeout = globalThis.setTimeout
+        const originalClearTimeout = globalThis.clearTimeout
+        globalThis.setTimeout = ((handler: () => void) => {
+            scheduledPolls.push(handler)
+            return scheduledPolls.length
+        }) as typeof globalThis.setTimeout
+        globalThis.clearTimeout = () => undefined
 
-        expect(tracker.isCurrentRequest(firstRequest)).toBe(false)
-        expect(tracker.isCurrentRequest(secondRequest)).toBe(true)
+        try {
+            const scheduler = createCockpitPollScheduler()
+            const completions: (() => void)[] = []
+            let loadCount = 0
+            const loadSnapshot = () => {
+                loadCount += 1
+                return new Promise<void>((resolve) => completions.push(resolve))
+            }
+
+            scheduler.run(loadSnapshot, 3_000)
+
+            expect(loadCount).toBe(1)
+            expect(scheduledPolls).toHaveLength(0)
+
+            completions[0]?.()
+            await Promise.resolve()
+            expect(scheduledPolls).toHaveLength(1)
+
+            scheduledPolls[0]?.()
+            expect(loadCount).toBe(2)
+        } finally {
+            globalThis.setTimeout = originalSetTimeout
+            globalThis.clearTimeout = originalClearTimeout
+        }
     })
 
     it("rejects failed or malformed snapshot responses", async () => {
