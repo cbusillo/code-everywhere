@@ -3,9 +3,14 @@ import type { AddressInfo } from "node:net"
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
-import type { EveryCodeSession, PendingApproval, ProjectedCockpitSession } from "@code-everywhere/contracts"
+import type { EveryCodeSession, PendingApproval, ProjectedCockpitSession, SessionCommand } from "@code-everywhere/contracts"
 
-import { createCockpitEventStore, type CockpitIngestionSnapshot } from "./index"
+import {
+    createCockpitCommandStore,
+    createCockpitEventStore,
+    type CockpitCommandSnapshot,
+    type CockpitIngestionSnapshot,
+} from "./index"
 import { createCockpitHttpServer } from "./http"
 
 const baseSession: EveryCodeSession = {
@@ -38,11 +43,16 @@ const baseApproval: PendingApproval = {
 
 describe("cockpit HTTP transport", () => {
     const store = createCockpitEventStore()
-    const server = createCockpitHttpServer({ store })
+    const commandStore = createCockpitCommandStore([], {
+        now: () => new Date("2026-04-27T16:20:00.000Z"),
+        createId: (index) => `test-command-${String(index)}`,
+    })
+    const server = createCockpitHttpServer({ store, commandStore })
     let baseUrl = ""
 
     beforeEach(async () => {
         store.reset()
+        commandStore.reset()
         await new Promise<void>((resolve) => {
             server.listen(0, "127.0.0.1", resolve)
         })
@@ -265,6 +275,76 @@ describe("cockpit HTTP transport", () => {
             })
         }
         expect((await sendJson(baseUrl, "GET", "/snapshot")).body).toMatchObject({ eventCount: 0 })
+    })
+
+    it("enqueues and reads session commands", async () => {
+        const command: SessionCommand = {
+            kind: "approval_decision",
+            sessionId: "session-1",
+            sessionEpoch: "epoch-1",
+            approvalId: "approval-1",
+            decision: "approve",
+        }
+
+        const emptyResponse = await sendJson(baseUrl, "GET", "/commands")
+        expect(emptyResponse.statusCode).toBe(200)
+        expect(emptyResponse.body).toEqual({ commandCount: 0, commands: [] })
+
+        const postResponse = await sendJson(baseUrl, "POST", "/commands", { command })
+        expect(postResponse.statusCode).toBe(200)
+        expect(postResponse.body).toEqual({
+            commandCount: 1,
+            commands: [
+                {
+                    id: "test-command-1",
+                    receivedAt: "2026-04-27T16:20:00.000Z",
+                    deliveredAt: null,
+                    command,
+                },
+            ],
+        })
+
+        const readResponse = await sendJson(baseUrl, "GET", "/commands")
+        const body = readResponse.body as CockpitCommandSnapshot
+        expect(body.commands.map((record) => record.command.kind)).toEqual(["approval_decision"])
+    })
+
+    it("rejects invalid session commands", async () => {
+        const invalidCommands = [
+            { nope: true },
+            {
+                kind: "reply",
+                sessionId: "session-1",
+                sessionEpoch: "epoch-1",
+                content: 42,
+            },
+            {
+                kind: "approval_decision",
+                sessionId: "session-1",
+                sessionEpoch: "epoch-1",
+                approvalId: "approval-1",
+                decision: "expired",
+            },
+            {
+                kind: "request_user_input_response",
+                sessionId: "session-1",
+                sessionEpoch: "epoch-1",
+                turnId: "turn-1",
+                answers: [{ questionId: "question-1", value: 7 }],
+            },
+        ]
+
+        for (const command of invalidCommands) {
+            await expect(sendJson(baseUrl, "POST", "/commands", { command })).resolves.toMatchObject({
+                statusCode: 400,
+                body: { error: "Expected one cockpit session command" },
+            })
+        }
+        await expect(sendJson(baseUrl, "PATCH", "/commands", {})).resolves.toMatchObject({
+            statusCode: 405,
+            body: { error: "Method not allowed" },
+        })
+        expect((await sendJson(baseUrl, "GET", "/commands")).body).toEqual({ commandCount: 0, commands: [] })
     })
 })
 

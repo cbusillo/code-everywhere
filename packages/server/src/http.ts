@@ -5,24 +5,34 @@ import type {
     EveryCodeSession,
     PendingApproval,
     RequestedInput,
+    RequestedInputAnswer,
     RequestedInputOption,
     RequestedInputQuestion,
+    SessionCommand,
     SessionTurn,
     SessionStatus,
     TurnStatus,
     TurnStep,
 } from "@code-everywhere/contracts"
 
-import { createCockpitEventStore, type CockpitEventStore, type CockpitIngestionSnapshot } from "./index"
+import {
+    createCockpitCommandStore,
+    createCockpitEventStore,
+    type CockpitCommandSnapshot,
+    type CockpitCommandStore,
+    type CockpitEventStore,
+    type CockpitIngestionSnapshot,
+} from "./index"
 
 export type CockpitHttpHandlerOptions = {
     store?: CockpitEventStore
+    commandStore?: CockpitCommandStore
     maxBodyBytes?: number
 }
 
 export type CockpitHttpServerOptions = CockpitHttpHandlerOptions
 
-type JsonResponse = CockpitIngestionSnapshot | { error: string }
+type JsonResponse = CockpitIngestionSnapshot | CockpitCommandSnapshot | { error: string }
 
 const defaultMaxBodyBytes = 1024 * 1024
 const sessionStatusValues = [
@@ -47,13 +57,15 @@ const turnStepKindValues = ["message", "tool", "status", "diff", "artifact", "er
 const turnStepStateValues = ["pending", "running", "completed", "blocked", "error"] as const satisfies readonly TurnStep["state"][]
 const approvalRiskValues = ["low", "medium", "high"] as const satisfies readonly PendingApproval["risk"][]
 const approvalDecisionValues = ["approve", "deny", "expired"] as const
+const commandApprovalDecisionValues = ["approve", "deny"] as const
 
 export const createCockpitHttpHandler = (options: CockpitHttpHandlerOptions = {}) => {
     const store = options.store ?? createCockpitEventStore()
+    const commandStore = options.commandStore ?? createCockpitCommandStore()
     const maxBodyBytes = options.maxBodyBytes ?? defaultMaxBodyBytes
 
     return (request: IncomingMessage, response: ServerResponse): void => {
-        void routeRequest(request, response, store, maxBodyBytes).catch((error: unknown) => {
+        void routeRequest(request, response, store, commandStore, maxBodyBytes).catch((error: unknown) => {
             if (error instanceof HttpInputError) {
                 writeJson(response, error.statusCode, { error: error.message })
                 return
@@ -71,6 +83,7 @@ const routeRequest = async (
     request: IncomingMessage,
     response: ServerResponse,
     store: CockpitEventStore,
+    commandStore: CockpitCommandStore,
     maxBodyBytes: number,
 ): Promise<void> => {
     setCorsHeaders(response)
@@ -107,6 +120,28 @@ const routeRequest = async (
         }
 
         writeJson(response, 200, store.ingestMany(events))
+        return
+    }
+
+    if (url.pathname === "/commands") {
+        if (request.method === "GET") {
+            writeJson(response, 200, commandStore.getSnapshot())
+            return
+        }
+
+        if (request.method !== "POST") {
+            writeMethodNotAllowed(response, "GET, POST")
+            return
+        }
+
+        const body = await readJsonBody(request, maxBodyBytes)
+        const command = normalizeCommandPayload(body)
+        if (command === null) {
+            writeJson(response, 400, { error: "Expected one cockpit session command" })
+            return
+        }
+
+        writeJson(response, 200, commandStore.enqueue(command))
         return
     }
 
@@ -198,6 +233,54 @@ const selectEventPayload = (payload: unknown): unknown[] | null => {
 
     return null
 }
+
+const normalizeCommandPayload = (payload: unknown): SessionCommand | null => {
+    const command = selectCommandPayload(payload)
+    return isSessionCommand(command) ? command : null
+}
+
+const selectCommandPayload = (payload: unknown): unknown => {
+    if (isRecord(payload) && "command" in payload) {
+        return payload.command
+    }
+
+    return payload
+}
+
+const isSessionCommand = (value: unknown): value is SessionCommand => {
+    if (!isRecord(value) || typeof value.kind !== "string") {
+        return false
+    }
+
+    switch (value.kind) {
+        case "reply":
+            return hasCommandScope(value) && hasString(value, "content")
+        case "continue_autonomously":
+        case "pause_current_turn":
+        case "end_session":
+        case "status_request":
+            return hasCommandScope(value)
+        case "approval_decision":
+            return (
+                hasCommandScope(value) && hasString(value, "approvalId") && hasEnum(value, "decision", commandApprovalDecisionValues)
+            )
+        case "request_user_input_response":
+            return (
+                hasCommandScope(value) &&
+                hasString(value, "turnId") &&
+                Array.isArray(value.answers) &&
+                value.answers.every(isRequestedInputAnswer)
+            )
+        default:
+            return false
+    }
+}
+
+const hasCommandScope = (value: Record<string, unknown>): boolean =>
+    hasString(value, "sessionId") && hasString(value, "sessionEpoch")
+
+const isRequestedInputAnswer = (value: unknown): value is RequestedInputAnswer =>
+    isRecord(value) && hasString(value, "questionId") && hasString(value, "value")
 
 const isCockpitProjectionEvent = (value: unknown): value is CockpitProjectionEvent => {
     if (!isRecord(value) || typeof value.kind !== "string") {

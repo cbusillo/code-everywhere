@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vitest"
 
-import type { CockpitProjectionEvent, EveryCodeSession, PendingApproval, SessionTurn } from "@code-everywhere/contracts"
+import type {
+    CockpitProjectionEvent,
+    EveryCodeSession,
+    PendingApproval,
+    SessionCommand,
+    SessionTurn,
+} from "@code-everywhere/contracts"
 
-import { createCockpitEventStore } from "./index"
+import { createCockpitCommandStore, createCockpitEventStore } from "./index"
 
 const baseSession: EveryCodeSession = {
     sessionId: "session-1",
@@ -177,5 +183,84 @@ describe("cockpit event store", () => {
         const freshEventLog = store.getEvents()
         expect(freshEventLog[0]?.kind).toBe("session_hello")
         expect(freshEventLog[0]?.kind === "session_hello" ? freshEventLog[0].session.summary : null).toBe("Waiting for work")
+    })
+})
+
+describe("cockpit command store", () => {
+    const baseCommand: SessionCommand = {
+        kind: "reply",
+        sessionId: "session-1",
+        sessionEpoch: "epoch-1",
+        content: "Continue with the local transport spike.",
+    }
+
+    it("starts with an empty command inbox", () => {
+        const store = createCockpitCommandStore()
+
+        expect(store.getSnapshot()).toEqual({
+            commandCount: 0,
+            commands: [],
+        })
+    })
+
+    it("enqueues commands with local delivery metadata", () => {
+        const store = createCockpitCommandStore([], {
+            now: () => new Date("2026-04-27T16:20:00.000Z"),
+            createId: (index) => `test-command-${String(index)}`,
+        })
+
+        const snapshot = store.enqueue(baseCommand)
+
+        expect(snapshot).toEqual({
+            commandCount: 1,
+            commands: [
+                {
+                    id: "test-command-1",
+                    receivedAt: "2026-04-27T16:20:00.000Z",
+                    deliveredAt: null,
+                    command: baseCommand,
+                },
+            ],
+        })
+    })
+
+    it("resets and returns defensive copies", () => {
+        const command: SessionCommand = {
+            kind: "request_user_input_response",
+            sessionId: "session-1",
+            sessionEpoch: "epoch-1",
+            turnId: "turn-1",
+            answers: [
+                {
+                    questionId: "question-1",
+                    value: "timeline",
+                },
+            ],
+        }
+        const store = createCockpitCommandStore([baseCommand], {
+            now: () => new Date("2026-04-27T16:20:00.000Z"),
+        })
+
+        const snapshot = store.reset([command])
+        const inputCommand = snapshot.commands[0]?.command
+        if (inputCommand?.kind === "request_user_input_response") {
+            inputCommand.answers.push({ questionId: "mutated", value: "mutated" })
+        }
+
+        const commandLog = store.getCommands()
+        const loggedInputCommand = commandLog[0]?.command
+        if (loggedInputCommand?.kind === "request_user_input_response") {
+            loggedInputCommand.answers[0] = { questionId: "changed", value: "changed" }
+        }
+
+        const freshCommand = store.getSnapshot().commands[0]?.command
+        expect(store.getSnapshot().commandCount).toBe(1)
+        expect(freshCommand?.kind).toBe("request_user_input_response")
+        expect(freshCommand?.kind === "request_user_input_response" ? freshCommand.answers : []).toEqual([
+            {
+                questionId: "question-1",
+                value: "timeline",
+            },
+        ])
     })
 })

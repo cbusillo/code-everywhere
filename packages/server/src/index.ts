@@ -5,6 +5,7 @@ import type {
     PendingApproval,
     ProjectedCockpitSession,
     RequestedInput,
+    SessionCommand,
     SessionId,
     SessionTurn,
     StaleCockpitEvent,
@@ -29,6 +30,30 @@ export type CockpitEventStore = {
     getSnapshot: () => CockpitIngestionSnapshot
     getEvents: () => CockpitProjectionEvent[]
     reset: (events?: CockpitProjectionEvent[]) => CockpitIngestionSnapshot
+}
+
+export type CockpitCommandRecord = {
+    id: string
+    receivedAt: string
+    deliveredAt: string | null
+    command: SessionCommand
+}
+
+export type CockpitCommandSnapshot = {
+    commandCount: number
+    commands: CockpitCommandRecord[]
+}
+
+export type CockpitCommandStore = {
+    enqueue: (command: SessionCommand) => CockpitCommandSnapshot
+    getSnapshot: () => CockpitCommandSnapshot
+    getCommands: () => CockpitCommandRecord[]
+    reset: (commands?: SessionCommand[]) => CockpitCommandSnapshot
+}
+
+export type CockpitCommandStoreOptions = {
+    now?: () => Date
+    createId?: (nextIndex: number) => string
 }
 
 export const createCockpitEventStore = (initialEvents: CockpitProjectionEvent[] = []): CockpitEventStore => {
@@ -69,6 +94,54 @@ export const createCockpitEventStore = (initialEvents: CockpitProjectionEvent[] 
 
     if (initialEvents.length > 0) {
         store.ingestMany(initialEvents)
+    }
+
+    return store
+}
+
+export const createCockpitCommandStore = (
+    initialCommands: SessionCommand[] = [],
+    options: CockpitCommandStoreOptions = {},
+): CockpitCommandStore => {
+    const now = options.now ?? (() => new Date())
+    const createId = options.createId ?? ((nextIndex: number) => `command-${String(nextIndex)}`)
+    let commands: CockpitCommandRecord[] = []
+
+    const getSnapshot = (): CockpitCommandSnapshot => ({
+        commandCount: commands.length,
+        commands: commands.map(cloneCommandRecord),
+    })
+
+    const enqueue = (command: SessionCommand): CockpitCommandSnapshot => {
+        commands = [
+            ...commands,
+            {
+                id: createId(commands.length + 1),
+                receivedAt: now().toISOString(),
+                deliveredAt: null,
+                command: cloneCommand(command),
+            },
+        ]
+        return getSnapshot()
+    }
+
+    const reset = (nextCommands: SessionCommand[] = []): CockpitCommandSnapshot => {
+        commands = []
+        for (const command of nextCommands) {
+            enqueue(command)
+        }
+        return getSnapshot()
+    }
+
+    const store = {
+        enqueue,
+        getSnapshot,
+        getCommands: () => commands.map(cloneCommandRecord),
+        reset,
+    }
+
+    if (initialCommands.length > 0) {
+        store.reset(initialCommands)
     }
 
     return store
@@ -157,6 +230,30 @@ const cloneRequestedInput = (input: RequestedInput): RequestedInput => ({
         options: question.options.map((option) => ({ ...option })),
     })),
 })
+
+const cloneCommandRecord = (record: CockpitCommandRecord): CockpitCommandRecord => ({
+    ...record,
+    command: cloneCommand(record.command),
+})
+
+const cloneCommand = (command: SessionCommand): SessionCommand => {
+    switch (command.kind) {
+        case "reply":
+            return { ...command }
+        case "continue_autonomously":
+        case "pause_current_turn":
+        case "end_session":
+        case "status_request":
+            return { ...command }
+        case "approval_decision":
+            return { ...command }
+        case "request_user_input_response":
+            return {
+                ...command,
+                answers: command.answers.map((answer) => ({ ...answer })),
+            }
+    }
+}
 
 const cloneNotification = (notification: CockpitNotification): CockpitNotification => ({ ...notification })
 

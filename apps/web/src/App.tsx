@@ -1,5 +1,13 @@
 import * as Dialog from "@radix-ui/react-dialog"
-import type { PendingApproval, RequestedInput, SessionStatus, SessionTurn, TurnStatus, TurnStep } from "@code-everywhere/contracts"
+import type {
+    PendingApproval,
+    RequestedInput,
+    SessionCommand,
+    SessionStatus,
+    SessionTurn,
+    TurnStatus,
+    TurnStep,
+} from "@code-everywhere/contracts"
 import {
     AlertCircle,
     Bell,
@@ -25,6 +33,7 @@ import {
 } from "lucide-react"
 import { useMemo, useState } from "react"
 
+import { postCockpitCommand } from "./cockpitCommands"
 import { getAttentionSessions, statusLabels, type CockpitSession } from "./cockpitData"
 import { describeTransportStatus, useCockpitView, type CockpitTransportStatus } from "./cockpitTransport"
 
@@ -85,13 +94,23 @@ export const App = () => {
     const activeApproval = cockpit.approvals.find((approval) => approval.sessionId === activeSession?.sessionId)
     const activeInput = cockpit.requestedInputs.find((input) => input.sessionId === activeSession?.sessionId)
 
-    const logCommand = (label: string) => {
-        if (activeSession === undefined) {
-            setCommandLog(`${label} ignored because no live session is selected`)
+    const dispatchCommand = (label: string, command: SessionCommand) => {
+        const transportUrl = cockpitView.transport.url
+        if (cockpitView.transport.mode !== "live" || transportUrl === null) {
+            setCommandLog(`${label} mocked for ${command.sessionId} at epoch ${command.sessionEpoch}`)
             return
         }
 
-        setCommandLog(`${label} mocked for ${activeSession.sessionId} at epoch ${activeSession.sessionEpoch}`)
+        setCommandLog(`Sending ${label} for ${command.sessionId} at epoch ${command.sessionEpoch}`)
+        void postCockpitCommand(transportUrl, command)
+            .then((snapshot) => {
+                setCommandLog(
+                    `${label} sent for ${command.sessionId} at epoch ${command.sessionEpoch}; ${String(snapshot.commandCount)} queued`,
+                )
+            })
+            .catch((error: unknown) => {
+                setCommandLog(`${label} failed: ${error instanceof Error ? error.message : "Unable to send command"}`)
+            })
     }
 
     return (
@@ -128,7 +147,12 @@ export const App = () => {
                         </>
                     ) : (
                         <>
-                            <SessionDetail session={activeSession} reply={reply} setReply={setReply} logCommand={logCommand} />
+                            <SessionDetail
+                                session={activeSession}
+                                reply={reply}
+                                setReply={setReply}
+                                dispatchCommand={dispatchCommand}
+                            />
                             <ActionRail
                                 session={activeSession}
                                 approval={activeApproval}
@@ -136,7 +160,7 @@ export const App = () => {
                                 inputAnswer={inputAnswer}
                                 setInputAnswer={setInputAnswer}
                                 commandLog={commandLog}
-                                logCommand={logCommand}
+                                dispatchCommand={dispatchCommand}
                             />
                         </>
                     )}
@@ -235,14 +259,25 @@ const EmptyActionRail = ({ transport, commandLog }: { transport: CockpitTranspor
     </aside>
 )
 
+type ScopedCommandKind = Extract<
+    SessionCommand["kind"],
+    "continue_autonomously" | "pause_current_turn" | "end_session" | "status_request"
+>
+
+const createScopedCommand = (session: CockpitSession, kind: ScopedCommandKind): SessionCommand => ({
+    kind,
+    sessionId: session.sessionId,
+    sessionEpoch: session.sessionEpoch,
+})
+
 type SessionDetailProps = {
     session: CockpitSession
     reply: string
     setReply: (value: string) => void
-    logCommand: (label: string) => void
+    dispatchCommand: (label: string, command: SessionCommand) => void
 }
 
-const SessionDetail = ({ session, reply, setReply, logCommand }: SessionDetailProps) => (
+const SessionDetail = ({ session, reply, setReply, dispatchCommand }: SessionDetailProps) => (
     <section className="panel detail-panel" aria-label="Active session detail">
         <div className="detail-header">
             <div className="detail-title-block">
@@ -255,10 +290,22 @@ const SessionDetail = ({ session, reply, setReply, logCommand }: SessionDetailPr
                 <p>Last update {formatTime(session.updatedAt)}. Commands attach to the current session epoch.</p>
             </div>
             <div className="session-actions" aria-label="Session commands">
-                <ActionButton icon={MessageSquareText} label="Status" onClick={() => logCommand("Status request")} />
-                <ActionButton icon={Pause} label="Pause" onClick={() => logCommand("Pause")} />
-                <ActionButton icon={Play} label="Continue" onClick={() => logCommand("Continue")} />
-                <EndSessionButton onEnd={() => logCommand("End session")} />
+                <ActionButton
+                    icon={MessageSquareText}
+                    label="Status"
+                    onClick={() => dispatchCommand("Status request", createScopedCommand(session, "status_request"))}
+                />
+                <ActionButton
+                    icon={Pause}
+                    label="Pause"
+                    onClick={() => dispatchCommand("Pause", createScopedCommand(session, "pause_current_turn"))}
+                />
+                <ActionButton
+                    icon={Play}
+                    label="Continue"
+                    onClick={() => dispatchCommand("Continue", createScopedCommand(session, "continue_autonomously"))}
+                />
+                <EndSessionButton onEnd={() => dispatchCommand("End session", createScopedCommand(session, "end_session"))} />
             </div>
         </div>
 
@@ -281,7 +328,14 @@ const SessionDetail = ({ session, reply, setReply, logCommand }: SessionDetailPr
                 <button
                     className="primary-button"
                     type="button"
-                    onClick={() => logCommand(reply.trim() === "" ? "Empty reply" : "Reply")}
+                    onClick={() =>
+                        dispatchCommand(reply.trim() === "" ? "Empty reply" : "Reply", {
+                            kind: "reply",
+                            sessionId: session.sessionId,
+                            sessionEpoch: session.sessionEpoch,
+                            content: reply.trim(),
+                        })
+                    }
                 >
                     <Send size={16} />
                     Send
@@ -311,10 +365,18 @@ type ActionRailProps = {
     inputAnswer: string
     setInputAnswer: (value: string) => void
     commandLog: string
-    logCommand: (label: string) => void
+    dispatchCommand: (label: string, command: SessionCommand) => void
 }
 
-const ActionRail = ({ session, approval, requestedInput, inputAnswer, setInputAnswer, commandLog, logCommand }: ActionRailProps) => (
+const ActionRail = ({
+    session,
+    approval,
+    requestedInput,
+    inputAnswer,
+    setInputAnswer,
+    commandLog,
+    dispatchCommand,
+}: ActionRailProps) => (
     <aside className="action-rail" aria-label="Pending work and actions">
         <section className="panel work-panel priority-panel">
             <div className="panel-heading">
@@ -332,9 +394,14 @@ const ActionRail = ({ session, approval, requestedInput, inputAnswer, setInputAn
                 </div>
             ) : null}
 
-            {approval === undefined ? null : <ApprovalCard approval={approval} logCommand={logCommand} />}
+            {approval === undefined ? null : <ApprovalCard approval={approval} dispatchCommand={dispatchCommand} />}
             {requestedInput === undefined ? null : (
-                <RequestedInputCard input={requestedInput} value={inputAnswer} setValue={setInputAnswer} logCommand={logCommand} />
+                <RequestedInputCard
+                    input={requestedInput}
+                    value={inputAnswer}
+                    setValue={setInputAnswer}
+                    dispatchCommand={dispatchCommand}
+                />
             )}
         </section>
 
@@ -346,10 +413,22 @@ const ActionRail = ({ session, approval, requestedInput, inputAnswer, setInputAn
                 </div>
             </div>
             <div className="command-grid">
-                <ActionButton icon={CirclePause} label="Pause" onClick={() => logCommand("Pause")} />
-                <ActionButton icon={CirclePlay} label="Continue" onClick={() => logCommand("Continue")} />
-                <ActionButton icon={History} label="Status" onClick={() => logCommand("Status request")} />
-                <EndSessionButton onEnd={() => logCommand("End session")} />
+                <ActionButton
+                    icon={CirclePause}
+                    label="Pause"
+                    onClick={() => dispatchCommand("Pause", createScopedCommand(session, "pause_current_turn"))}
+                />
+                <ActionButton
+                    icon={CirclePlay}
+                    label="Continue"
+                    onClick={() => dispatchCommand("Continue", createScopedCommand(session, "continue_autonomously"))}
+                />
+                <ActionButton
+                    icon={History}
+                    label="Status"
+                    onClick={() => dispatchCommand("Status request", createScopedCommand(session, "status_request"))}
+                />
+                <EndSessionButton onEnd={() => dispatchCommand("End session", createScopedCommand(session, "end_session"))} />
             </div>
             <div className="mock-log" aria-live="polite">
                 <span>Mock command</span>
@@ -363,7 +442,13 @@ const ActionRail = ({ session, approval, requestedInput, inputAnswer, setInputAn
     </aside>
 )
 
-const ApprovalCard = ({ approval, logCommand }: { approval: PendingApproval; logCommand: (label: string) => void }) => (
+const ApprovalCard = ({
+    approval,
+    dispatchCommand,
+}: {
+    approval: PendingApproval
+    dispatchCommand: (label: string, command: SessionCommand) => void
+}) => (
     <article className="decision-card approval-card">
         <div className="decision-title">
             <ShieldAlert size={18} />
@@ -377,11 +462,35 @@ const ApprovalCard = ({ approval, logCommand }: { approval: PendingApproval; log
         <p>{approval.body}</p>
         <code>{approval.command}</code>
         <div className="decision-actions">
-            <button className="primary-button" type="button" onClick={() => logCommand(`Approve ${approval.id}`)}>
+            <button
+                className="primary-button"
+                type="button"
+                onClick={() =>
+                    dispatchCommand(`Approve ${approval.id}`, {
+                        kind: "approval_decision",
+                        sessionId: approval.sessionId,
+                        sessionEpoch: approval.sessionEpoch,
+                        approvalId: approval.id,
+                        decision: "approve",
+                    })
+                }
+            >
                 <Check size={16} />
                 Approve
             </button>
-            <button className="quiet-button danger" type="button" onClick={() => logCommand(`Deny ${approval.id}`)}>
+            <button
+                className="quiet-button danger"
+                type="button"
+                onClick={() =>
+                    dispatchCommand(`Deny ${approval.id}`, {
+                        kind: "approval_decision",
+                        sessionId: approval.sessionId,
+                        sessionEpoch: approval.sessionEpoch,
+                        approvalId: approval.id,
+                        decision: "deny",
+                    })
+                }
+            >
                 <X size={16} />
                 Deny
             </button>
@@ -393,10 +502,10 @@ type RequestedInputCardProps = {
     input: RequestedInput
     value: string
     setValue: (value: string) => void
-    logCommand: (label: string) => void
+    dispatchCommand: (label: string, command: SessionCommand) => void
 }
 
-const RequestedInputCard = ({ input, value, setValue, logCommand }: RequestedInputCardProps) => {
+const RequestedInputCard = ({ input, value, setValue, dispatchCommand }: RequestedInputCardProps) => {
     const question = input.questions[0]
 
     if (question === undefined) {
@@ -437,7 +546,20 @@ const RequestedInputCard = ({ input, value, setValue, logCommand }: RequestedInp
             <button
                 className="primary-button full-width"
                 type="button"
-                onClick={() => logCommand(`Submit input ${input.id}: ${value}`)}
+                onClick={() =>
+                    dispatchCommand(`Submit input ${input.id}`, {
+                        kind: "request_user_input_response",
+                        sessionId: input.sessionId,
+                        sessionEpoch: input.sessionEpoch,
+                        turnId: input.turnId,
+                        answers: [
+                            {
+                                questionId: question.id,
+                                value,
+                            },
+                        ],
+                    })
+                }
             >
                 <Send size={16} />
                 Submit input
@@ -528,7 +650,7 @@ const EndSessionButton = ({ onEnd }: { onEnd: () => void }) => (
             <Dialog.Content className="dialog-content">
                 <Dialog.Title>End this session?</Dialog.Title>
                 <Dialog.Description>
-                    This mocked control records the command locally. The live bridge will send an epoch-scoped end command.
+                    This control sends an epoch-scoped end command when the local HTTP transport is live.
                 </Dialog.Description>
                 <div className="dialog-actions">
                     <Dialog.Close asChild>
