@@ -52,3 +52,19 @@ The first useful spike should render fake or recorded Every Code events into a c
 5. reply, pause, continue, and end commands as inert or mocked actions
 
 Only after that should we wire the live bridge.
+
+## Local Command Consumption
+
+The local HTTP transport now separates clients that produce commands from the
+Every Code adapter that consumes them:
+
+- web and native clients enqueue operator actions with `POST /commands`
+- local adapters claim undelivered work with `POST /commands/claim`
+- `POST /commands/claim` accepts an optional `sessionId` filter and marks
+  returned commands delivered before responding
+- adapter code should prefer the typed `claimCockpitCommands` helper exported
+  from `@code-everywhere/server/http-client`
+
+The next live bridge slice should run inside or beside Every Code, claim commands
+for its active `sessionId`, translate `SessionCommand` values into the runtime's
+remote-command handling, and emit projection events as command outcomes change.

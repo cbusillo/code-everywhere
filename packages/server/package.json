@@ -13,6 +13,10 @@
         "./http": {
             "types": "./src/http.ts",
             "default": "./src/http.ts"
+        },
+        "./http-client": {
+            "types": "./src/http-client.ts",
+            "default": "./src/http-client.ts"
         }
     },
     "scripts": {
