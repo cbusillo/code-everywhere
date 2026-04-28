@@ -18,9 +18,9 @@ export type CockpitViewState = {
     transport: CockpitTransportStatus
 }
 
-export type CockpitPollRequestTracker = {
-    startRequest: () => number
-    isCurrentRequest: (requestId: number) => boolean
+export type CockpitPollScheduler = {
+    run: (loadSnapshot: () => Promise<void>, pollIntervalMs: number) => void
+    stop: () => void
 }
 
 type UseCockpitViewOptions = {
@@ -68,18 +68,12 @@ export const useCockpitView = (options: UseCockpitViewOptions = {}): CockpitView
             return undefined
         }
 
-        let cancelled = false
-        const requestTracker = createCockpitPollRequestTracker()
+        const scheduler = createCockpitPollScheduler()
 
         const loadSnapshot = async () => {
-            const requestId = requestTracker.startRequest()
-
             try {
                 const snapshot = await fetchSnapshot(transportUrl)
                 const loadedAt = getNow(now)
-                if (cancelled || !requestTracker.isCurrentRequest(requestId)) {
-                    return
-                }
 
                 setState({
                     fixture: createCockpitFixtureFromSnapshot(snapshot, { generatedAt: loadedAt }),
@@ -91,10 +85,6 @@ export const useCockpitView = (options: UseCockpitViewOptions = {}): CockpitView
                     },
                 })
             } catch (error) {
-                if (cancelled || !requestTracker.isCurrentRequest(requestId)) {
-                    return
-                }
-
                 const failedAt = getNow(now)
                 setState((current) => ({
                     fixture: current.transport.mode === "live" ? current.fixture : cockpitFixture,
@@ -108,27 +98,40 @@ export const useCockpitView = (options: UseCockpitViewOptions = {}): CockpitView
             }
         }
 
-        void loadSnapshot()
-        const intervalId = window.setInterval(() => void loadSnapshot(), pollIntervalMs)
+        scheduler.run(loadSnapshot, pollIntervalMs)
 
         return () => {
-            cancelled = true
-            window.clearInterval(intervalId)
+            scheduler.stop()
         }
     }, [fetchSnapshot, now, pollIntervalMs, transportUrl])
 
     return state
 }
 
-export const createCockpitPollRequestTracker = (): CockpitPollRequestTracker => {
-    let latestRequestId = 0
+export const createCockpitPollScheduler = (): CockpitPollScheduler => {
+    let stopped = false
+    let timeoutId: ReturnType<typeof globalThis.setTimeout> | null = null
 
     return {
-        startRequest: () => {
-            latestRequestId += 1
-            return latestRequestId
+        run: (loadSnapshot, pollIntervalMs) => {
+            const poll = () => {
+                void loadSnapshot().finally(() => {
+                    if (stopped) {
+                        return
+                    }
+
+                    timeoutId = globalThis.setTimeout(poll, pollIntervalMs)
+                })
+            }
+
+            poll()
         },
-        isCurrentRequest: (requestId) => requestId === latestRequestId,
+        stop: () => {
+            stopped = true
+            if (timeoutId !== null) {
+                globalThis.clearTimeout(timeoutId)
+            }
+        },
     }
 }
 

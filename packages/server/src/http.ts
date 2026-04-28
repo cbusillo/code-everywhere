@@ -295,6 +295,7 @@ const isCockpitProjectionEvent = (value: unknown): value is CockpitProjectionEve
                 hasString(value, "sessionId") &&
                 hasString(value, "sessionEpoch") &&
                 hasEnum(value, "status", sessionStatusValues) &&
+                hasOptionalString(value, "summary") &&
                 hasString(value, "updatedAt")
             )
         case "turn_started":
@@ -311,7 +312,9 @@ const isCockpitProjectionEvent = (value: unknown): value is CockpitProjectionEve
                 hasString(value, "sessionId") &&
                 hasString(value, "sessionEpoch") &&
                 hasString(value, "turnId") &&
-                hasEnum(value, "status", turnStatusValues)
+                hasEnum(value, "status", turnStatusValues) &&
+                hasOptionalString(value, "summary") &&
+                hasOptionalNullableString(value, "completedAt")
             )
         case "approval_requested":
             return isPendingApproval(value.approval)
@@ -418,6 +421,9 @@ const isRequestedInputOption = (value: unknown): value is RequestedInputOption =
 
 const hasString = (value: Record<string, unknown>, key: string): boolean => typeof value[key] === "string"
 
+const hasOptionalString = (value: Record<string, unknown>, key: string): boolean =>
+    value[key] === undefined || typeof value[key] === "string"
+
 const hasEnum = (value: Record<string, unknown>, key: string, allowedValues: readonly string[]): boolean => {
     const candidate = value[key]
     return typeof candidate === "string" && allowedValues.includes(candidate)
@@ -425,6 +431,9 @@ const hasEnum = (value: Record<string, unknown>, key: string, allowedValues: rea
 
 const hasNullableString = (value: Record<string, unknown>, key: string): boolean =>
     typeof value[key] === "string" || value[key] === null
+
+const hasOptionalNullableString = (value: Record<string, unknown>, key: string): boolean =>
+    value[key] === undefined || typeof value[key] === "string" || value[key] === null
 
 const hasNumber = (value: Record<string, unknown>, key: string): boolean => typeof value[key] === "number"
 
