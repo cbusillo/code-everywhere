@@ -33,8 +33,9 @@ import {
 } from "lucide-react"
 import { useMemo, useState } from "react"
 
-import { postCockpitCommand } from "./cockpitCommands"
+import { canPostCockpitCommand, postCockpitCommand } from "./cockpitCommands"
 import { getAttentionSessions, statusLabels, type CockpitSession } from "./cockpitData"
+import { getDraftValue, getRequestedInputDefault, setDraftValue, type DraftMap } from "./cockpitDrafts"
 import { describeTransportStatus, useCockpitView, type CockpitTransportStatus } from "./cockpitTransport"
 
 const selectedSessionId = "ce-alpha"
@@ -82,8 +83,8 @@ export const App = () => {
     const cockpitView = useCockpitView()
     const cockpit = cockpitView.fixture
     const [activeSessionId, setActiveSessionId] = useState(selectedSessionId)
-    const [reply, setReply] = useState("")
-    const [inputAnswer, setInputAnswer] = useState("pending-work")
+    const [replyDrafts, setReplyDrafts] = useState<DraftMap>({})
+    const [inputAnswerDrafts, setInputAnswerDrafts] = useState<DraftMap>({})
     const [commandLog, setCommandLog] = useState("No mocked command sent yet")
     const fallbackSession = cockpit.sessions[0]
     const activeSession =
@@ -93,10 +94,28 @@ export const App = () => {
     const attentionSessions = useMemo(() => getAttentionSessions(cockpit.sessions), [cockpit.sessions])
     const activeApproval = cockpit.approvals.find((approval) => approval.sessionId === activeSession?.sessionId)
     const activeInput = cockpit.requestedInputs.find((input) => input.sessionId === activeSession?.sessionId)
+    const reply = getDraftValue(replyDrafts, activeSession?.sessionId)
+    const inputAnswer = getDraftValue(inputAnswerDrafts, activeInput?.id, getRequestedInputDefault(activeInput))
+
+    const setReply = (value: string) => {
+        if (activeSession === undefined) {
+            return
+        }
+
+        setReplyDrafts((drafts) => setDraftValue(drafts, activeSession.sessionId, value))
+    }
+
+    const setInputAnswer = (value: string) => {
+        if (activeInput === undefined) {
+            return
+        }
+
+        setInputAnswerDrafts((drafts) => setDraftValue(drafts, activeInput.id, value))
+    }
 
     const dispatchCommand = (label: string, command: SessionCommand) => {
         const transportUrl = cockpitView.transport.url
-        if (cockpitView.transport.mode !== "live" || transportUrl === null) {
+        if (!canPostCockpitCommand(transportUrl)) {
             setCommandLog(`${label} mocked for ${command.sessionId} at epoch ${command.sessionEpoch}`)
             return
         }

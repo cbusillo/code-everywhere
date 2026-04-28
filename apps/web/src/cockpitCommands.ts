@@ -32,6 +32,8 @@ export const postCockpitCommand = async (
 
 export const createCommandUrl = (transportUrl: string): string => `${transportUrl.replace(/\/+$/, "")}/commands`
 
+export const canPostCockpitCommand = (transportUrl: string | null): transportUrl is string => transportUrl !== null
+
 const isCockpitCommandSnapshot = (value: unknown): value is CockpitCommandSnapshot =>
     isRecord(value) && typeof value.commandCount === "number" && Array.isArray(value.commands)
 

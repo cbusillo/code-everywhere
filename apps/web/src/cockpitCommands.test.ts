@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import type { SessionCommand } from "@code-everywhere/contracts"
 
-import { createCommandUrl, postCockpitCommand } from "./cockpitCommands"
+import { canPostCockpitCommand, createCommandUrl, postCockpitCommand } from "./cockpitCommands"
 
 describe("cockpit command client", () => {
     const command: SessionCommand = {
@@ -14,6 +14,11 @@ describe("cockpit command client", () => {
     it("builds command URLs from a configured transport root", () => {
         expect(createCommandUrl("http://127.0.0.1:4789")).toBe("http://127.0.0.1:4789/commands")
         expect(createCommandUrl("http://127.0.0.1:4789/")).toBe("http://127.0.0.1:4789/commands")
+    })
+
+    it("posts commands whenever a transport URL is configured", () => {
+        expect(canPostCockpitCommand(null)).toBe(false)
+        expect(canPostCockpitCommand("http://127.0.0.1:4789")).toBe(true)
     })
 
     it("posts commands as JSON and validates the response", async () => {
