@@ -1,5 +1,6 @@
 import * as Dialog from "@radix-ui/react-dialog"
 import type {
+    CommandOutcome,
     PendingApproval,
     RequestedInput,
     SessionCommand,
@@ -101,6 +102,7 @@ export const App = () => {
     const attentionSessions = useMemo(() => getAttentionSessions(cockpit.sessions), [cockpit.sessions])
     const activeApproval = cockpit.approvals.find((approval) => approval.sessionId === activeSession?.sessionId)
     const activeInput = cockpit.requestedInputs.find((input) => input.sessionId === activeSession?.sessionId)
+    const activeCommandOutcome = getLatestCommandOutcome(cockpit.commandOutcomes, activeSession?.sessionId)
     const reply = getDraftValue(replyDrafts, activeSession?.sessionId)
     const inputAnswerValues = getRequestedInputAnswerValues(inputAnswerDrafts, activeInput)
 
@@ -185,6 +187,7 @@ export const App = () => {
                                 inputAnswerValues={inputAnswerValues}
                                 setInputAnswer={setInputAnswer}
                                 commandLog={commandLog}
+                                commandOutcome={activeCommandOutcome}
                                 dispatchCommand={dispatchCommand}
                             />
                         </>
@@ -390,6 +393,7 @@ type ActionRailProps = {
     inputAnswerValues: Record<string, string>
     setInputAnswer: (questionId: string, value: string) => void
     commandLog: string
+    commandOutcome: CommandOutcome | undefined
     dispatchCommand: (label: string, command: SessionCommand) => void
 }
 
@@ -400,6 +404,7 @@ const ActionRail = ({
     inputAnswerValues,
     setInputAnswer,
     commandLog,
+    commandOutcome,
     dispatchCommand,
 }: ActionRailProps) => (
     <aside className="action-rail" aria-label="Pending work and actions">
@@ -456,12 +461,13 @@ const ActionRail = ({
                 <EndSessionButton onEnd={() => dispatchCommand("End session", createScopedCommand(session, "end_session"))} />
             </div>
             <div className="mock-log" aria-live="polite">
-                <span>Mock command</span>
+                <span>Command status</span>
                 <p>{commandLog}</p>
+                {commandOutcome === undefined ? null : <p>{formatCommandOutcome(commandOutcome)}</p>}
             </div>
             <div className="epoch-note">
                 <AlertCircle size={16} />
-                <p>Commands target {session.sessionEpoch}; stale epochs should reject visibly once the live bridge exists.</p>
+                <p>Commands target {session.sessionEpoch}; stale epochs are rejected by the active Every Code session.</p>
             </div>
         </section>
     </aside>
@@ -688,6 +694,26 @@ const EndSessionButton = ({ onEnd }: { onEnd: () => void }) => (
         </Dialog.Portal>
     </Dialog.Root>
 )
+
+const getLatestCommandOutcome = (outcomes: CommandOutcome[], sessionId: string | undefined): CommandOutcome | undefined => {
+    if (sessionId === undefined) {
+        return undefined
+    }
+
+    return outcomes.find((outcome) => outcome.sessionId === sessionId)
+}
+
+const formatCommandOutcome = (outcome: CommandOutcome): string => {
+    const result = outcome.status === "accepted" ? "Accepted" : "Rejected"
+    const reason = outcome.reason === null || outcome.reason.trim() === "" ? "" : `: ${outcome.reason}`
+    return `${result} ${formatCommandKind(outcome.commandKind)} at ${formatTime(outcome.handledAt)}${reason}`
+}
+
+const formatCommandKind = (kind: SessionCommand["kind"]): string =>
+    kind
+        .split("_")
+        .map((part) => `${part[0]?.toUpperCase() ?? ""}${part.slice(1)}`)
+        .join(" ")
 
 const formatTime = (iso: string): string =>
     new Intl.DateTimeFormat("en", {

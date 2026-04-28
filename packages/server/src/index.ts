@@ -1,4 +1,5 @@
 import type {
+    CommandOutcome,
     CockpitNotification,
     CockpitProjectionEvent,
     CockpitProjectionState,
@@ -230,6 +231,11 @@ const cloneEvent = (event: CockpitProjectionEvent): CockpitProjectionEvent => {
             }
         case "user_input_resolved":
             return { ...event }
+        case "command_outcome":
+            return {
+                kind: event.kind,
+                outcome: cloneCommandOutcome(event.outcome),
+            }
     }
 }
 
@@ -238,6 +244,7 @@ const cloneProjectionState = (state: CockpitProjectionState): CockpitProjectionS
     turns: cloneRecord(state.turns, cloneTurn),
     pendingApprovals: cloneRecord(state.pendingApprovals, cloneApproval),
     requestedInputs: cloneRecord(state.requestedInputs, cloneRequestedInput),
+    commandOutcomes: cloneRecord(state.commandOutcomes, cloneCommandOutcome),
     notifications: state.notifications.map(cloneNotification),
     staleEvents: state.staleEvents.map(cloneStaleEvent),
 })
@@ -266,6 +273,8 @@ const cloneRequestedInput = (input: RequestedInput): RequestedInput => ({
         options: question.options.map((option) => ({ ...option })),
     })),
 })
+
+const cloneCommandOutcome = (outcome: CommandOutcome): CommandOutcome => ({ ...outcome })
 
 const cloneCommandRecord = (record: CockpitCommandRecord): CockpitCommandRecord => ({
     ...record,

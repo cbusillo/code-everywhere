@@ -368,6 +368,43 @@ describe("cockpit projection", () => {
         })
     })
 
+    it("projects accepted and rejected command outcomes", () => {
+        const state = projectCockpitEvents([
+            {
+                kind: "session_hello",
+                session: baseSession,
+            },
+            {
+                kind: "command_outcome",
+                outcome: {
+                    commandId: "command-1",
+                    sessionId: "session-1",
+                    sessionEpoch: "epoch-1",
+                    commandKind: "status_request",
+                    status: "accepted",
+                    reason: null,
+                    handledAt: "2026-04-27T16:07:00.000Z",
+                },
+            },
+            {
+                kind: "command_outcome",
+                outcome: {
+                    commandId: "command-2",
+                    sessionId: "session-1",
+                    sessionEpoch: "epoch-1",
+                    commandKind: "reply",
+                    status: "rejected",
+                    reason: "No active turn is waiting for a reply.",
+                    handledAt: "2026-04-27T16:08:00.000Z",
+                },
+            },
+        ])
+
+        expect(state.commandOutcomes["command-1"]?.status).toBe("accepted")
+        expect(state.commandOutcomes["command-2"]?.reason).toBe("No active turn is waiting for a reply.")
+        expect(state.sessions["session-1"]?.updatedAt).toBe("2026-04-27T16:08:00.000Z")
+    })
+
     it("records stale epoch events without mutating pending work", () => {
         const state = projectCockpitEvents([
             {
@@ -397,9 +434,22 @@ describe("cockpit projection", () => {
                     requestedAt: "2026-04-27T16:11:00.000Z",
                 },
             },
+            {
+                kind: "command_outcome",
+                outcome: {
+                    commandId: "command-stale",
+                    sessionId: "session-1",
+                    sessionEpoch: "epoch-1",
+                    commandKind: "status_request",
+                    status: "accepted",
+                    reason: null,
+                    handledAt: "2026-04-27T16:11:30.000Z",
+                },
+            },
         ])
 
         expect(state.pendingApprovals).toEqual({})
+        expect(state.commandOutcomes).toEqual({})
         expect(state.sessions["session-1"]?.sessionEpoch).toBe("epoch-2")
         expect(state.sessions["session-1"]?.attention).toBe("none")
         expect(state.staleEvents).toEqual([
@@ -409,6 +459,13 @@ describe("cockpit projection", () => {
                 eventEpoch: "epoch-1",
                 currentEpoch: "epoch-2",
                 receivedAt: "2026-04-27T16:11:00.000Z",
+            },
+            {
+                eventKind: "command_outcome",
+                sessionId: "session-1",
+                eventEpoch: "epoch-1",
+                currentEpoch: "epoch-2",
+                receivedAt: "2026-04-27T16:11:30.000Z",
             },
         ])
         expect(state.notifications[state.notifications.length - 1]?.kind).toBe("stale-event")
@@ -430,6 +487,18 @@ describe("cockpit projection", () => {
                 input: baseInput,
             },
             {
+                kind: "command_outcome",
+                outcome: {
+                    commandId: "command-1",
+                    sessionId: "session-1",
+                    sessionEpoch: "epoch-1",
+                    commandKind: "status_request",
+                    status: "accepted",
+                    reason: null,
+                    handledAt: "2026-04-27T16:11:00.000Z",
+                },
+            },
+            {
                 kind: "session_hello",
                 session: {
                     ...baseSession,
@@ -442,6 +511,7 @@ describe("cockpit projection", () => {
         const state = projectCockpitEvents(events)
 
         expect(state.requestedInputs).toEqual({})
+        expect(state.commandOutcomes).toEqual({})
         expect(state.turns).toEqual({})
         expect(state.sessions["session-1"]?.sessionEpoch).toBe("epoch-2")
         expect(state.sessions["session-1"]?.turnIds).toEqual([])

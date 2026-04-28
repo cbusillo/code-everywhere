@@ -92,6 +92,18 @@ export type SessionCommand =
           answers: RequestedInputAnswer[]
       }
 
+export type CommandOutcomeStatus = "accepted" | "rejected"
+
+export type CommandOutcome = {
+    commandId: string
+    sessionId: SessionId
+    sessionEpoch: SessionEpoch
+    commandKind: SessionCommand["kind"]
+    status: CommandOutcomeStatus
+    reason: string | null
+    handledAt: string
+}
+
 export type RequestedInputAnswer = {
     questionId: string
     value: string
@@ -169,6 +181,7 @@ export type CockpitProjectionState = {
     turns: Record<TurnId, SessionTurn>
     pendingApprovals: Record<string, PendingApproval>
     requestedInputs: Record<string, RequestedInput>
+    commandOutcomes: Record<string, CommandOutcome>
     notifications: CockpitNotification[]
     staleEvents: StaleCockpitEvent[]
 }
@@ -241,12 +254,17 @@ export type CockpitProjectionEvent =
           inputId: string
           resolvedAt: string
       }
+    | {
+          kind: "command_outcome"
+          outcome: CommandOutcome
+      }
 
 export const createEmptyCockpitState = (): CockpitProjectionState => ({
     sessions: {},
     turns: {},
     pendingApprovals: {},
     requestedInputs: {},
+    commandOutcomes: {},
     notifications: [],
     staleEvents: [],
 })
@@ -392,6 +410,11 @@ export const projectCockpitEvent = (state: CockpitProjectionState, event: Cockpi
                     pendingInputIds,
                 })
             })
+        case "command_outcome":
+            return withCurrentSession(state, outcomeEventScope(event), (draft) => {
+                draft.commandOutcomes[event.outcome.commandId] = event.outcome
+                touchSession(draft, event.outcome.sessionId, event.outcome.handledAt)
+            })
     }
 }
 
@@ -470,6 +493,13 @@ const inputEventScope = (event: Extract<CockpitProjectionEvent, { kind: "user_in
     receivedAt: event.input.requestedAt,
 })
 
+const outcomeEventScope = (event: Extract<CockpitProjectionEvent, { kind: "command_outcome" }>) => ({
+    kind: event.kind,
+    sessionId: event.outcome.sessionId,
+    sessionEpoch: event.outcome.sessionEpoch,
+    receivedAt: event.outcome.handledAt,
+})
+
 const eventScope = (
     event: Pick<CockpitProjectionEvent, "kind"> & { sessionEpoch: SessionEpoch; sessionId?: SessionId },
     receivedAt: string,
@@ -492,6 +522,7 @@ const cloneState = (state: CockpitProjectionState): CockpitProjectionState => ({
     turns: Object.fromEntries(Object.entries(state.turns).map(([turnId, turn]) => [turnId, { ...turn, steps: [...turn.steps] }])),
     pendingApprovals: { ...state.pendingApprovals },
     requestedInputs: { ...state.requestedInputs },
+    commandOutcomes: { ...state.commandOutcomes },
     notifications: [...state.notifications],
     staleEvents: [...state.staleEvents],
 })
@@ -558,6 +589,9 @@ const statusWithPendingWork = (
 const removeSessionEpochItems = (state: CockpitProjectionState, sessionId: SessionId): void => {
     removeSessionPendingItems(state, sessionId)
     state.turns = Object.fromEntries(Object.entries(state.turns).filter(([, turn]) => turn.sessionId !== sessionId))
+    state.commandOutcomes = Object.fromEntries(
+        Object.entries(state.commandOutcomes).filter(([, outcome]) => outcome.sessionId !== sessionId),
+    )
 }
 
 const removeSessionPendingItems = (state: CockpitProjectionState, sessionId: SessionId): void => {

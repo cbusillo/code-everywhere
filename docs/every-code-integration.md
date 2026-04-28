@@ -64,6 +64,8 @@ Every Code adapter that consumes them:
 - local adapters claim undelivered work with `POST /commands/claim`
 - `POST /commands/claim` accepts an optional `sessionId` filter and marks
   returned commands delivered before responding
+- local adapters publish `command_outcome` events after runtime command
+  handling accepts or rejects claimed work
 - adapter code should prefer the typed `claimCockpitCommands` helper exported
   from `@code-everywhere/server/http-client`
 - adapter code should publish session events with the typed `postCockpitEvents`
@@ -72,7 +74,9 @@ Every Code adapter that consumes them:
 The Every Code HTTP remote-inbox adapter claims commands for its active
 `sessionId`, translates `SessionCommand` values into the runtime's existing
 remote-command handling, and emits projection events as session status and
-pending work change.
+pending work change. Claimed commands should progress from queued to delivered
+to accepted or rejected in the cockpit so operators can tell whether the local
+session actually handled them.
 
 ## Local Smoke Loop
 

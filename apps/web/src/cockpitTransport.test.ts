@@ -43,6 +43,7 @@ describe("cockpit HTTP transport client", () => {
                 turns: {},
                 pendingApprovals: {},
                 requestedInputs: {},
+                commandOutcomes: {},
                 notifications: [],
                 staleEvents: [],
             },
@@ -54,6 +55,7 @@ describe("cockpit HTTP transport client", () => {
             sessions: [],
             approvals: [],
             requestedInputs: [],
+            commandOutcomes: [],
         })
     })
 
@@ -112,6 +114,29 @@ describe("cockpit HTTP transport client", () => {
                     { status: 200 },
                 ),
             )
+        const malformedOutcomeFetch: Parameters<typeof fetchCockpitSnapshot>[1] = () =>
+            Promise.resolve(
+                new Response(
+                    JSON.stringify({
+                        ...cockpitFixtureSnapshot,
+                        state: {
+                            ...cockpitFixtureSnapshot.state,
+                            commandOutcomes: {
+                                "command-1": {
+                                    commandId: "command-1",
+                                    sessionId: "ce-alpha",
+                                    sessionEpoch: "epoch-34",
+                                    commandKind: "teleport",
+                                    status: "accepted",
+                                    reason: null,
+                                    handledAt: "2026-04-27T17:00:00.000Z",
+                                },
+                            },
+                        },
+                    }),
+                    { status: 200 },
+                ),
+            )
 
         await expect(fetchCockpitSnapshot("http://127.0.0.1:4789", failingFetch)).rejects.toThrow(
             "Cockpit snapshot request failed with 503",
@@ -120,6 +145,9 @@ describe("cockpit HTTP transport client", () => {
             "Cockpit snapshot response did not match the expected shape",
         )
         await expect(fetchCockpitSnapshot("http://127.0.0.1:4789", malformedNestedFetch)).rejects.toThrow(
+            "Cockpit snapshot response did not match the expected shape",
+        )
+        await expect(fetchCockpitSnapshot("http://127.0.0.1:4789", malformedOutcomeFetch)).rejects.toThrow(
             "Cockpit snapshot response did not match the expected shape",
         )
     })
