@@ -35,7 +35,7 @@
         "build": "tsc -p tsconfig.json",
         "start": "pnpm --filter @code-everywhere/contracts build && pnpm build && node dist/cli.js",
         "typecheck": "tsc -p tsconfig.json --noEmit",
-        "test": "NODE_OPTIONS=--conditions=development vitest run src --passWithNoTests"
+        "test": "node ../../scripts/run-vitest-development.mjs run src --passWithNoTests"
     },
     "dependencies": {
         "@code-everywhere/contracts": "workspace:*"

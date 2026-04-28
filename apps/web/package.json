@@ -7,7 +7,7 @@
         "dev": "vite --host 127.0.0.1",
         "build": "vite build",
         "typecheck": "tsc -p tsconfig.json --noEmit",
-        "test": "NODE_OPTIONS=--conditions=development vitest run --passWithNoTests"
+        "test": "node ../../scripts/run-vitest-development.mjs run --passWithNoTests"
     },
     "dependencies": {
         "@code-everywhere/contracts": "workspace:*",

@@ -18,7 +18,7 @@ export default defineConfig(
         languageOptions: {
             parserOptions: {
                 projectService: {
-                    allowDefaultProject: ["eslint.config.js"],
+                    allowDefaultProject: ["eslint.config.js", "scripts/run-vitest-development.mjs"],
                 },
                 tsconfigRootDir,
             },
@@ -38,6 +38,19 @@ export default defineConfig(
             "@typescript-eslint/prefer-nullish-coalescing": "off",
             "@typescript-eslint/no-unsafe-assignment": "off",
             "@typescript-eslint/no-unsafe-argument": "off",
+            "@typescript-eslint/no-unsafe-call": "off",
+            "@typescript-eslint/no-unsafe-member-access": "off",
+        },
+    },
+    {
+        files: ["scripts/run-vitest-development.mjs"],
+        languageOptions: {
+            globals: {
+                process: "readonly",
+            },
+        },
+        rules: {
+            "@typescript-eslint/no-unsafe-assignment": "off",
             "@typescript-eslint/no-unsafe-call": "off",
             "@typescript-eslint/no-unsafe-member-access": "off",
         },

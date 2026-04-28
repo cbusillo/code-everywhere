@@ -18,7 +18,7 @@
     "scripts": {
         "build": "tsc -p tsconfig.json",
         "typecheck": "tsc -p tsconfig.json --noEmit",
-        "test": "NODE_OPTIONS=--conditions=development vitest run src --passWithNoTests"
+        "test": "node ../../scripts/run-vitest-development.mjs run src --passWithNoTests"
     },
     "devDependencies": {}
 }
