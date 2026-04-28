@@ -14,7 +14,7 @@ describe("cockpit HTTP server CLI", () => {
         expect(
             parseCockpitServerArgs(["--host", "0.0.0.0", "--port=4900"], {
                 CODE_EVERYWHERE_HOST: "127.0.0.1",
-                CODE_EVERYWHERE_PORT: "4789",
+                CODE_EVERYWHERE_PORT: "nope",
             }),
         ).toEqual({
             host: "0.0.0.0",
@@ -22,6 +22,7 @@ describe("cockpit HTTP server CLI", () => {
             help: false,
         })
         expect(parseCockpitServerArgs(["--", "--help"], {})).toMatchObject({ help: true })
+        expect(() => parseCockpitServerArgs([], { CODE_EVERYWHERE_PORT: "nope" })).toThrow("CODE_EVERYWHERE_PORT must")
     })
 
     it("rejects invalid options", () => {
