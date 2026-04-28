@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import type { SessionCommand } from "@code-everywhere/contracts"
 
-import { claimCockpitCommands, createCommandClaimUrl } from "./http-client"
+import { claimCockpitCommands, createCockpitEventsUrl, createCommandClaimUrl, postCockpitEvents } from "./http-client"
 
 describe("cockpit HTTP client", () => {
     const command: SessionCommand = {
@@ -14,6 +14,8 @@ describe("cockpit HTTP client", () => {
     it("builds command claim URLs from a configured transport root", () => {
         expect(createCommandClaimUrl("http://127.0.0.1:4789")).toBe("http://127.0.0.1:4789/commands/claim")
         expect(createCommandClaimUrl("http://127.0.0.1:4789/")).toBe("http://127.0.0.1:4789/commands/claim")
+        expect(createCommandClaimUrl("http://127.0.0.1:4789/local/")).toBe("http://127.0.0.1:4789/local/commands/claim")
+        expect(createCockpitEventsUrl("http://127.0.0.1:4789/local/")).toBe("http://127.0.0.1:4789/local/events")
     })
 
     it("claims commands with an optional session filter", async () => {
@@ -61,6 +63,73 @@ describe("cockpit HTTP client", () => {
         )
         await expect(claimCockpitCommands("http://127.0.0.1:4789", { fetch: malformedFetch })).rejects.toThrow(
             "Cockpit command claim response did not match the expected shape",
+        )
+    })
+
+    it("publishes one or more cockpit events", async () => {
+        const requests: { url: string; init: RequestInit | undefined }[] = []
+        const event = {
+            kind: "session_hello",
+            session: {
+                sessionId: "session-1",
+                sessionEpoch: "epoch-1",
+                hostLabel: "workhorse-mac",
+                cwd: "~/code/code-everywhere",
+                branch: "main",
+                pid: 1234,
+                model: "code-gpt-5.4",
+                status: "idle",
+                summary: "Waiting for work",
+                startedAt: "2026-04-27T16:00:00.000Z",
+                updatedAt: "2026-04-27T16:00:00.000Z",
+                currentTurnId: null,
+            },
+        } as const
+        const fetchImpl: typeof globalThis.fetch = (input, init) => {
+            requests.push({ url: toRequestUrl(input), init })
+            return Promise.resolve(
+                new Response(
+                    JSON.stringify({
+                        eventCount: 1,
+                        state: {
+                            sessions: {},
+                            turns: {},
+                            pendingApprovals: {},
+                            requestedInputs: {},
+                            notifications: [],
+                            staleEvents: [],
+                        },
+                        sessions: [],
+                        attentionSessionIds: [],
+                    }),
+                    { status: 200 },
+                ),
+            )
+        }
+
+        await expect(postCockpitEvents("http://127.0.0.1:4789", event, fetchImpl)).resolves.toMatchObject({ eventCount: 1 })
+        expect(requests[0]).toMatchObject({
+            url: "http://127.0.0.1:4789/events",
+            init: {
+                method: "POST",
+                body: JSON.stringify({ event }),
+            },
+        })
+
+        await postCockpitEvents("http://127.0.0.1:4789", [event], fetchImpl)
+        expect(requests[1]?.init?.body).toBe(JSON.stringify({ events: [event] }))
+    })
+
+    it("rejects failed or malformed event publish responses", async () => {
+        const failingFetch: typeof globalThis.fetch = () => Promise.resolve(new Response("Nope", { status: 400 }))
+        const malformedFetch: typeof globalThis.fetch = () =>
+            Promise.resolve(new Response(JSON.stringify({ eventCount: 1 }), { status: 200 }))
+
+        await expect(postCockpitEvents("http://127.0.0.1:4789", [], failingFetch)).rejects.toThrow(
+            "Cockpit event publish request failed with 400",
+        )
+        await expect(postCockpitEvents("http://127.0.0.1:4789", [], malformedFetch)).rejects.toThrow(
+            "Cockpit event publish response did not match the expected shape",
         )
     })
 })
