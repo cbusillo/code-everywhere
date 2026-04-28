@@ -345,6 +345,14 @@ export const projectCockpitEvent = (state: CockpitProjectionState, event: Cockpi
         case "approval_requested":
             return withCurrentSession(state, approvalEventScope(event), (draft, session) => {
                 draft.pendingApprovals[event.approval.id] = event.approval
+                markTurnStep(draft, event.approval.turnId, {
+                    id: approvalStepId(event.approval.id),
+                    kind: "status",
+                    title: "Approval required",
+                    detail: event.approval.command,
+                    timestamp: event.approval.requestedAt,
+                    state: "blocked",
+                })
                 draft.sessions[event.approval.sessionId] = withAttention({
                     ...session,
                     status: "waiting-for-approval",
@@ -366,6 +374,11 @@ export const projectCockpitEvent = (state: CockpitProjectionState, event: Cockpi
             return withCurrentSession(state, eventScope(event, event.resolvedAt), (draft, session) => {
                 draft.pendingApprovals = omitRecordKey(draft.pendingApprovals, event.approvalId)
                 const pendingApprovalIds = session.pendingApprovalIds.filter((approvalId) => approvalId !== event.approvalId)
+                markTurnStepForPendingItem(draft, session, event.approvalId, approvalStepId, {
+                    title: approvalDecisionTitle(event.decision),
+                    timestamp: event.resolvedAt,
+                    state: event.decision === "deny" ? "error" : "completed",
+                })
 
                 draft.sessions[event.sessionId] = withAttention({
                     ...session,
@@ -379,6 +392,14 @@ export const projectCockpitEvent = (state: CockpitProjectionState, event: Cockpi
         case "user_input_requested":
             return withCurrentSession(state, inputEventScope(event), (draft, session) => {
                 draft.requestedInputs[event.input.id] = event.input
+                markTurnStep(draft, event.input.turnId, {
+                    id: inputStepId(event.input.id),
+                    kind: "status",
+                    title: "Input requested",
+                    detail: event.input.questions.map((question) => question.prompt).join("\n"),
+                    timestamp: event.input.requestedAt,
+                    state: "blocked",
+                })
                 draft.sessions[event.input.sessionId] = withAttention({
                     ...session,
                     status: "waiting-for-input",
@@ -400,6 +421,11 @@ export const projectCockpitEvent = (state: CockpitProjectionState, event: Cockpi
             return withCurrentSession(state, eventScope(event, event.resolvedAt), (draft, session) => {
                 draft.requestedInputs = omitRecordKey(draft.requestedInputs, event.inputId)
                 const pendingInputIds = session.pendingInputIds.filter((inputId) => inputId !== event.inputId)
+                markTurnStepForPendingItem(draft, session, event.inputId, inputStepId, {
+                    title: "Input answered",
+                    timestamp: event.resolvedAt,
+                    state: "completed",
+                })
 
                 draft.sessions[event.sessionId] = withAttention({
                     ...session,
@@ -604,6 +630,57 @@ const removeSessionPendingItems = (state: CockpitProjectionState, sessionId: Ses
 }
 
 const appendUnique = <Value>(values: Value[], value: Value): Value[] => (values.includes(value) ? values : [...values, value])
+
+const markTurnStep = (state: CockpitProjectionState, turnId: TurnId, step: TurnStep): void => {
+    const turn = state.turns[turnId]
+
+    if (turn === undefined) {
+        return
+    }
+
+    state.turns[turnId] = {
+        ...turn,
+        steps: upsertTurnStep(turn.steps, step),
+    }
+}
+
+const markTurnStepForPendingItem = (
+    state: CockpitProjectionState,
+    session: ProjectedCockpitSession,
+    pendingItemId: string,
+    stepId: (id: string) => string,
+    update: Pick<TurnStep, "title" | "timestamp" | "state">,
+): void => {
+    for (const turnId of session.turnIds) {
+        const turn = state.turns[turnId]
+        const existingStep = turn?.steps.find((step) => step.id === stepId(pendingItemId))
+
+        if (turn === undefined || existingStep === undefined) {
+            continue
+        }
+
+        markTurnStep(state, turnId, {
+            ...existingStep,
+            ...update,
+        })
+        return
+    }
+}
+
+const approvalStepId = (approvalId: string): string => `approval:${approvalId}`
+
+const inputStepId = (inputId: string): string => `input:${inputId}`
+
+const approvalDecisionTitle = (decision: "approve" | "deny" | "expired"): string => {
+    switch (decision) {
+        case "approve":
+            return "Approval granted"
+        case "deny":
+            return "Approval denied"
+        case "expired":
+            return "Approval expired"
+    }
+}
 
 const upsertTurnStep = (steps: TurnStep[], step: TurnStep): TurnStep[] => {
     const existingIndex = steps.findIndex((candidate) => candidate.id === step.id)
