@@ -97,6 +97,21 @@ describe("cockpit HTTP transport client", () => {
         const failingFetch: Parameters<typeof fetchCockpitSnapshot>[1] = () => Promise.resolve(new Response("Nope", { status: 503 }))
         const malformedFetch: Parameters<typeof fetchCockpitSnapshot>[1] = () =>
             Promise.resolve(new Response(JSON.stringify({ eventCount: 1 }), { status: 200 }))
+        const malformedNestedFetch: Parameters<typeof fetchCockpitSnapshot>[1] = () =>
+            Promise.resolve(
+                new Response(
+                    JSON.stringify({
+                        ...cockpitFixtureSnapshot,
+                        sessions: [
+                            {
+                                ...cockpitFixtureSnapshot.sessions[0],
+                                turnIds: "turn-alpha-3",
+                            },
+                        ],
+                    }),
+                    { status: 200 },
+                ),
+            )
 
         await expect(fetchCockpitSnapshot("http://127.0.0.1:4789", failingFetch)).rejects.toThrow(
             "Cockpit snapshot request failed with 503",
@@ -104,6 +119,36 @@ describe("cockpit HTTP transport client", () => {
         await expect(fetchCockpitSnapshot("http://127.0.0.1:4789", malformedFetch)).rejects.toThrow(
             "Cockpit snapshot response did not match the expected shape",
         )
+        await expect(fetchCockpitSnapshot("http://127.0.0.1:4789", malformedNestedFetch)).rejects.toThrow(
+            "Cockpit snapshot response did not match the expected shape",
+        )
+    })
+
+    it("does not schedule another poll after a pending request is stopped", async () => {
+        const scheduledPolls: (() => void)[] = []
+        const originalSetTimeout = globalThis.setTimeout
+        const originalClearTimeout = globalThis.clearTimeout
+        globalThis.setTimeout = ((handler: () => void) => {
+            scheduledPolls.push(handler)
+            return scheduledPolls.length
+        }) as typeof globalThis.setTimeout
+        globalThis.clearTimeout = () => undefined
+
+        try {
+            const scheduler = createCockpitPollScheduler()
+            let completeRequest: (() => void) | undefined
+            const loadSnapshot = () => new Promise<void>((resolve) => (completeRequest = resolve))
+
+            scheduler.run(loadSnapshot, 3_000)
+            scheduler.stop()
+            completeRequest?.()
+            await Promise.resolve()
+
+            expect(scheduledPolls).toHaveLength(0)
+        } finally {
+            globalThis.setTimeout = originalSetTimeout
+            globalThis.clearTimeout = originalClearTimeout
+        }
     })
 
     it("labels the visible transport modes", () => {
