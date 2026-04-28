@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http"
 
 import type {
+    CommandOutcome,
     CockpitProjectionEvent,
     EveryCodeSession,
     PendingApproval,
@@ -59,6 +60,16 @@ const turnStepStateValues = ["pending", "running", "completed", "blocked", "erro
 const approvalRiskValues = ["low", "medium", "high"] as const satisfies readonly PendingApproval["risk"][]
 const approvalDecisionValues = ["approve", "deny", "expired"] as const
 const commandApprovalDecisionValues = ["approve", "deny"] as const
+const sessionCommandKindValues = [
+    "reply",
+    "continue_autonomously",
+    "pause_current_turn",
+    "end_session",
+    "status_request",
+    "approval_decision",
+    "request_user_input_response",
+] as const satisfies readonly SessionCommand["kind"][]
+const commandOutcomeStatusValues = ["accepted", "rejected"] as const satisfies readonly CommandOutcome["status"][]
 
 export const createCockpitHttpHandler = (options: CockpitHttpHandlerOptions = {}) => {
     const store = options.store ?? createCockpitEventStore()
@@ -374,6 +385,8 @@ const isCockpitProjectionEvent = (value: unknown): value is CockpitProjectionEve
                 hasString(value, "inputId") &&
                 hasString(value, "resolvedAt")
             )
+        case "command_outcome":
+            return isCommandOutcome(value.outcome)
         default:
             return false
     }
@@ -442,6 +455,16 @@ const isRequestedInput = (value: unknown): value is RequestedInput =>
     hasString(value, "requestedAt") &&
     Array.isArray(value.questions) &&
     value.questions.every(isRequestedInputQuestion)
+
+const isCommandOutcome = (value: unknown): value is CommandOutcome =>
+    isRecord(value) &&
+    hasString(value, "commandId") &&
+    hasString(value, "sessionId") &&
+    hasString(value, "sessionEpoch") &&
+    hasEnum(value, "commandKind", sessionCommandKindValues) &&
+    hasEnum(value, "status", commandOutcomeStatusValues) &&
+    hasNullableString(value, "reason") &&
+    hasString(value, "handledAt")
 
 const isRequestedInputQuestion = (value: unknown): value is RequestedInputQuestion =>
     isRecord(value) &&

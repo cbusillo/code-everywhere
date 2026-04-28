@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 
 import type {
+    CommandOutcome,
     CockpitNotification,
     CockpitProjectionState,
     PendingApproval,
@@ -215,6 +216,7 @@ const isCockpitProjectionState = (value: unknown): value is CockpitProjectionSta
     isRecordOf(value.turns, isSessionTurn) &&
     isRecordOf(value.pendingApprovals, isPendingApproval) &&
     isRecordOf(value.requestedInputs, isRequestedInput) &&
+    isRecordOf(value.commandOutcomes, isCommandOutcome) &&
     isArrayOf(value.notifications, isCockpitNotification) &&
     isArrayOf(value.staleEvents, isStaleCockpitEvent)
 
@@ -281,6 +283,16 @@ const isRequestedInput = (value: unknown): value is RequestedInput =>
     isString(value.requestedAt) &&
     isArrayOf(value.questions, isRequestedInputQuestion)
 
+const isCommandOutcome = (value: unknown): value is CommandOutcome =>
+    isRecord(value) &&
+    isString(value.commandId) &&
+    isString(value.sessionId) &&
+    isString(value.sessionEpoch) &&
+    isSessionCommandKind(value.commandKind) &&
+    isCommandOutcomeStatus(value.status) &&
+    isNullableString(value.reason) &&
+    isString(value.handledAt)
+
 const isRequestedInputQuestion = (value: unknown): value is RequestedInputQuestion =>
     isRecord(value) &&
     isString(value.id) &&
@@ -342,6 +354,19 @@ const isTurnStepState = (value: unknown): value is TurnStep["state"] =>
 
 const isApprovalRisk = (value: unknown): value is PendingApproval["risk"] => isOneOf(value, ["low", "medium", "high"])
 
+const isSessionCommandKind = (value: unknown): value is CommandOutcome["commandKind"] =>
+    isOneOf(value, [
+        "reply",
+        "continue_autonomously",
+        "pause_current_turn",
+        "end_session",
+        "status_request",
+        "approval_decision",
+        "request_user_input_response",
+    ])
+
+const isCommandOutcomeStatus = (value: unknown): value is CommandOutcome["status"] => isOneOf(value, ["accepted", "rejected"])
+
 const isNotificationKind = (value: unknown): value is CockpitNotification["kind"] =>
     isOneOf(value, ["approval", "input", "blocked", "error", "ended", "stale-event"])
 
@@ -356,6 +381,7 @@ const isProjectionEventKind = (value: unknown): value is StaleCockpitEvent["even
         "approval_resolved",
         "user_input_requested",
         "user_input_resolved",
+        "command_outcome",
     ])
 
 const isOneOf = <Value extends string>(value: unknown, values: readonly Value[]): value is Value =>

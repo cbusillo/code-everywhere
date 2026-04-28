@@ -1,4 +1,5 @@
 import type {
+    CommandOutcome,
     CockpitProjectionEvent,
     EveryCodeSession,
     PendingApproval,
@@ -21,6 +22,7 @@ type SourceCockpitFixture = {
     sessions: SourceCockpitSession[]
     approvals: PendingApproval[]
     requestedInputs: RequestedInput[]
+    commandOutcomes: CommandOutcome[]
 }
 
 export type CockpitSession = ProjectedCockpitSession & {
@@ -33,6 +35,7 @@ export type CockpitFixture = {
     sessions: CockpitSession[]
     approvals: PendingApproval[]
     requestedInputs: RequestedInput[]
+    commandOutcomes: CommandOutcome[]
 }
 
 const sessionBase = {
@@ -390,6 +393,7 @@ const cockpitFixtureSource: SourceCockpitFixture = {
             ],
         },
     ],
+    commandOutcomes: [],
 }
 
 export const createCockpitFixtureEvents = (fixture: SourceCockpitFixture): CockpitProjectionEvent[] => [
@@ -446,6 +450,9 @@ export const createCockpitFixtureFromSnapshot = (
         })),
         approvals: Object.values(snapshot.state.pendingApprovals),
         requestedInputs: Object.values(snapshot.state.requestedInputs),
+        commandOutcomes: Object.values(snapshot.state.commandOutcomes).sort((left, right) =>
+            right.handledAt.localeCompare(left.handledAt),
+        ),
     }
 }
 

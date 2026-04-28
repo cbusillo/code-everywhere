@@ -112,6 +112,37 @@ describe("cockpit HTTP transport", () => {
         expect(body.state.pendingApprovals["approval-1"]).toEqual(baseApproval)
     })
 
+    it("ingests command outcome events", async () => {
+        await sendJson(baseUrl, "POST", "/events", {
+            event: {
+                kind: "session_hello",
+                session: baseSession,
+            },
+        })
+
+        const response = await sendJson(baseUrl, "POST", "/events", {
+            event: {
+                kind: "command_outcome",
+                outcome: {
+                    commandId: "test-command-1",
+                    sessionId: "session-1",
+                    sessionEpoch: "epoch-1",
+                    commandKind: "status_request",
+                    status: "accepted",
+                    reason: null,
+                    handledAt: "2026-04-27T16:21:00.000Z",
+                },
+            },
+        })
+
+        expect(response.statusCode).toBe(200)
+        const body = response.body as CockpitIngestionSnapshot
+        expect(body.state.commandOutcomes["test-command-1"]).toMatchObject({
+            commandKind: "status_request",
+            status: "accepted",
+        })
+    })
+
     it("resets with optional seed events", async () => {
         await sendJson(baseUrl, "POST", "/events", {
             event: {
@@ -281,6 +312,30 @@ describe("cockpit HTTP transport", () => {
                 turnId: "turn-1",
                 status: "completed",
                 completedAt: 42,
+            },
+            {
+                kind: "command_outcome",
+                outcome: {
+                    commandId: "test-command-1",
+                    sessionId: "session-1",
+                    sessionEpoch: "epoch-1",
+                    commandKind: "teleport",
+                    status: "accepted",
+                    reason: null,
+                    handledAt: "2026-04-27T16:21:00.000Z",
+                },
+            },
+            {
+                kind: "command_outcome",
+                outcome: {
+                    commandId: "test-command-2",
+                    sessionId: "session-1",
+                    sessionEpoch: "epoch-1",
+                    commandKind: "status_request",
+                    status: "queued-ish",
+                    reason: null,
+                    handledAt: "2026-04-27T16:21:00.000Z",
+                },
             },
         ]
 

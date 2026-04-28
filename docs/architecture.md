@@ -61,8 +61,9 @@ command-inbox endpoints for development and adapter spikes. Web and native
 clients enqueue operator actions with `POST /commands`; a local Every Code
 adapter can claim undelivered commands with `POST /commands/claim`, optionally
 filtered by `sessionId`, which marks those commands delivered before returning
-them. It does not yet provide persistence, streaming, authentication, direct
-runtime command execution, or notification delivery.
+them. The adapter reports runtime acceptance or rejection with `command_outcome`
+projection events. It does not yet provide persistence, streaming,
+authentication, direct runtime command execution, or notification delivery.
 
 ### Clients
 
