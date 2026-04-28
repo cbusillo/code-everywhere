@@ -57,9 +57,12 @@ in-memory: callers ingest typed cockpit projection events and read projected
 snapshots.
 
 A lightweight local HTTP transport exposes snapshot, event-ingest, reset, and
-command-inbox endpoints for development and adapter spikes. It does not yet
-provide persistence, streaming, authentication, runtime command delivery, or
-notification delivery.
+command-inbox endpoints for development and adapter spikes. Web and native
+clients enqueue operator actions with `POST /commands`; a local Every Code
+adapter can claim undelivered commands with `POST /commands/claim`, optionally
+filtered by `sessionId`, which marks those commands delivered before returning
+them. It does not yet provide persistence, streaming, authentication, direct
+runtime command execution, or notification delivery.
 
 ### Clients
 

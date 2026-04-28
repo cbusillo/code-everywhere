@@ -20,6 +20,7 @@ import {
     createCockpitEventStore,
     type CockpitCommandSnapshot,
     type CockpitCommandStore,
+    type CockpitCommandClaim,
     type CockpitEventStore,
     type CockpitIngestionSnapshot,
 } from "./index"
@@ -32,7 +33,7 @@ export type CockpitHttpHandlerOptions = {
 
 export type CockpitHttpServerOptions = CockpitHttpHandlerOptions
 
-type JsonResponse = CockpitIngestionSnapshot | CockpitCommandSnapshot | { error: string }
+type JsonResponse = CockpitIngestionSnapshot | CockpitCommandSnapshot | CockpitCommandClaim | { error: string }
 
 const defaultMaxBodyBytes = 1024 * 1024
 const sessionStatusValues = [
@@ -120,6 +121,23 @@ const routeRequest = async (
         }
 
         writeJson(response, 200, store.ingestMany(events))
+        return
+    }
+
+    if (url.pathname === "/commands/claim") {
+        if (request.method !== "POST") {
+            writeMethodNotAllowed(response, "POST")
+            return
+        }
+
+        const body = await readJsonBody(request, maxBodyBytes, true)
+        const filter = normalizeCommandClaimPayload(body)
+        if (filter === null) {
+            writeJson(response, 400, { error: "Expected command claim payload to be empty or contain a sessionId" })
+            return
+        }
+
+        writeJson(response, 200, commandStore.claimUndelivered(filter))
         return
     }
 
@@ -237,6 +255,27 @@ const selectEventPayload = (payload: unknown): unknown[] | null => {
 const normalizeCommandPayload = (payload: unknown): SessionCommand | null => {
     const command = selectCommandPayload(payload)
     return isSessionCommand(command) ? command : null
+}
+
+const normalizeCommandClaimPayload = (payload: unknown): { sessionId?: string } | null => {
+    if (payload === undefined) {
+        return {}
+    }
+
+    if (!isRecord(payload)) {
+        return null
+    }
+
+    if (Object.keys(payload).length === 0) {
+        return {}
+    }
+
+    const sessionId = payload.sessionId
+    if (Object.keys(payload).length === 1 && typeof sessionId === "string") {
+        return { sessionId }
+    }
+
+    return null
 }
 
 const selectCommandPayload = (payload: unknown): unknown => {
