@@ -12,6 +12,7 @@
         "lint": "eslint .",
         "lint:dry-run": "eslint . --fix-dry-run",
         "smoke:cockpit:turns": "node scripts/smoke-cockpit-turn-lifecycle.mjs",
+        "smoke:cockpit:web": "node scripts/smoke-cockpit-web-live-loop.mjs",
         "typecheck": "pnpm --recursive typecheck",
         "test": "pnpm --recursive test",
         "validate": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test"

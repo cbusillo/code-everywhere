@@ -53,10 +53,14 @@ const configuredTransportUrl = (() => {
     const transportUrl: unknown = import.meta.env.VITE_COCKPIT_HTTP_URL
     return typeof transportUrl === "string" ? normalizeTransportUrl(transportUrl) : null
 })()
+const configuredPollIntervalMs = (() => {
+    const pollIntervalMs: unknown = import.meta.env.VITE_COCKPIT_POLL_INTERVAL_MS
+    return typeof pollIntervalMs === "string" ? normalizePollIntervalMs(pollIntervalMs) : null
+})()
 
 export const useCockpitView = (options: UseCockpitViewOptions = {}): CockpitViewState => {
     const transportUrl = normalizeTransportUrl(options.transportUrl) ?? configuredTransportUrl
-    const pollIntervalMs = options.pollIntervalMs ?? defaultPollIntervalMs
+    const pollIntervalMs = options.pollIntervalMs ?? configuredPollIntervalMs ?? defaultPollIntervalMs
     const fetchSnapshot = options.fetchSnapshot ?? fetchCockpitSnapshot
     const fetchCommands = options.fetchCommands ?? fetchCockpitCommands
     const now = options.now
@@ -219,6 +223,16 @@ export const createSnapshotUrl = (transportUrl: string): string => `${transportU
 export function normalizeTransportUrl(transportUrl: string | undefined): string | null {
     const normalized = transportUrl?.trim()
     return normalized === undefined || normalized === "" ? null : normalized
+}
+
+export function normalizePollIntervalMs(value: string | undefined): number | null {
+    const normalized = value?.trim()
+    if (normalized === undefined || normalized === "") {
+        return null
+    }
+
+    const pollIntervalMs = Number(normalized)
+    return Number.isFinite(pollIntervalMs) && pollIntervalMs > 0 ? Math.floor(pollIntervalMs) : null
 }
 
 export const describeTransportStatus = (status: CockpitTransportStatus): string => {

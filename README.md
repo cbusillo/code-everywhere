@@ -52,6 +52,9 @@ pnpm cockpit:server
 VITE_COCKPIT_HTTP_URL=http://127.0.0.1:4789 pnpm --filter @code-everywhere/web dev
 ```
 
+For faster local smoke polling, set `VITE_COCKPIT_POLL_INTERVAL_MS` to a
+positive millisecond interval.
+
 The local server binds to `127.0.0.1:4789` by default. Override it with
 `CODE_EVERYWHERE_HOST`, `CODE_EVERYWHERE_PORT`, `--host`, or `--port` when a
 different local endpoint is needed.

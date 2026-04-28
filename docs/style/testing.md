@@ -16,6 +16,8 @@ High-value areas:
 ## Commands
 
 - Test: `pnpm test`
+- Broker projection smoke: `pnpm smoke:cockpit:turns`
+- Browser-backed broker/web smoke: `pnpm smoke:cockpit:web`
 - Full gate: `pnpm validate`
 
 ## Style
