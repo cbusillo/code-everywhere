@@ -83,6 +83,41 @@ describe("cockpit event retention", () => {
         expect(projectCockpitEvents(compacted).staleEvents).toEqual([])
     })
 
+    it("rehydrates blocked then completed turns in their terminal state", () => {
+        const compacted = compactCockpitEvents(
+            [
+                sessionHello(session("session-1", "epoch-1", "running", "2026-04-27T10:00:00.000Z", "turn-1")),
+                turnStarted("epoch-1", runningTurn("session-1", "turn-1", "2026-04-27T10:01:00.000Z")),
+                {
+                    kind: "turn_status_changed",
+                    sessionId: "session-1",
+                    sessionEpoch: "epoch-1",
+                    turnId: "turn-1",
+                    status: "blocked",
+                    summary: "Waiting for sandbox approval.",
+                    completedAt: "2026-04-27T10:02:00.000Z",
+                },
+                {
+                    kind: "turn_status_changed",
+                    sessionId: "session-1",
+                    sessionEpoch: "epoch-1",
+                    turnId: "turn-1",
+                    status: "completed",
+                    summary: "Turn complete.",
+                    completedAt: "2026-04-27T10:03:00.000Z",
+                },
+            ],
+            retentionPolicy,
+        )
+        const state = projectCockpitEvents(compacted)
+
+        expect(state.turns["turn-1"]?.status).toBe("completed")
+        expect(state.turns["turn-1"]?.completedAt).toBe("2026-04-27T10:03:00.000Z")
+        expect(state.sessions["session-1"]?.status).toBe("idle")
+        expect(state.sessions["session-1"]?.updatedAt).toBe("2026-04-27T10:03:00.000Z")
+        expect(state.notifications.map((notification) => notification.kind)).not.toContain("blocked")
+    })
+
     it("keeps only the newest command outcomes for retained sessions", () => {
         const compacted = compactCockpitEvents(
             [
@@ -129,6 +164,18 @@ const turn = (sessionId: string, turnId: string, startedAt: string, steps: TurnS
     completedAt: startedAt,
     summary: "Turn complete.",
     steps,
+})
+
+const runningTurn = (sessionId: string, turnId: string, startedAt: string): SessionTurn => ({
+    id: turnId,
+    sessionId,
+    title: `Turn ${turnId}`,
+    status: "running",
+    actor: "assistant",
+    startedAt,
+    completedAt: null,
+    summary: "Turn running.",
+    steps: [],
 })
 
 const step = (id: string, timestamp: string): TurnStep => ({
