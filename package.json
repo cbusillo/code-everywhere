@@ -6,6 +6,7 @@
     "description": "A structured Apple-first control surface for Every Code sessions.",
     "packageManager": "pnpm@10.10.0",
     "scripts": {
+        "cockpit:server": "pnpm --filter @code-everywhere/server start",
         "format": "prettier --write .",
         "format:check": "prettier --check .",
         "lint": "eslint .",

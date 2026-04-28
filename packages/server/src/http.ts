@@ -23,7 +23,7 @@ import {
     type CockpitCommandClaim,
     type CockpitEventStore,
     type CockpitIngestionSnapshot,
-} from "./index"
+} from "./index.js"
 
 export type CockpitHttpHandlerOptions = {
     store?: CockpitEventStore

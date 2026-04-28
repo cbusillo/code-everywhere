@@ -1,6 +1,6 @@
 import type { CockpitProjectionEvent } from "@code-everywhere/contracts"
 
-import type { CockpitCommandClaim, CockpitIngestionSnapshot } from "./index"
+import type { CockpitCommandClaim, CockpitIngestionSnapshot } from "./index.js"
 
 type FetchLike = typeof globalThis.fetch
 
