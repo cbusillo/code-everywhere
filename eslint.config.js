@@ -18,7 +18,7 @@ export default defineConfig(
         languageOptions: {
             parserOptions: {
                 projectService: {
-                    allowDefaultProject: ["eslint.config.js", "scripts/run-vitest-development.mjs"],
+                    allowDefaultProject: ["eslint.config.js", "scripts/*.mjs"],
                 },
                 tsconfigRootDir,
             },
@@ -43,7 +43,7 @@ export default defineConfig(
         },
     },
     {
-        files: ["scripts/run-vitest-development.mjs"],
+        files: ["scripts/*.mjs"],
         languageOptions: {
             globals: {
                 process: "readonly",
@@ -51,8 +51,11 @@ export default defineConfig(
         },
         rules: {
             "@typescript-eslint/no-unsafe-assignment": "off",
+            "@typescript-eslint/no-unsafe-argument": "off",
             "@typescript-eslint/no-unsafe-call": "off",
             "@typescript-eslint/no-unsafe-member-access": "off",
+            "@typescript-eslint/no-unsafe-return": "off",
+            "@typescript-eslint/restrict-template-expressions": "off",
         },
     },
 )
