@@ -1,6 +1,8 @@
 import type { SessionCommand } from "@code-everywhere/contracts"
 import type { CockpitCommandSnapshot } from "@code-everywhere/server"
 
+import type { CockpitTransportStatus } from "./cockpitTransport"
+
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
 
 export const postCockpitCommand = async (
@@ -32,7 +34,9 @@ export const postCockpitCommand = async (
 
 export const createCommandUrl = (transportUrl: string): string => `${transportUrl.replace(/\/+$/, "")}/commands`
 
-export const canPostCockpitCommand = (transportUrl: string | null): transportUrl is string => transportUrl !== null
+export const canPostCockpitCommand = (
+    transport: CockpitTransportStatus,
+): transport is CockpitTransportStatus & { mode: "live"; url: string } => transport.mode === "live" && transport.url !== null
 
 const isCockpitCommandSnapshot = (value: unknown): value is CockpitCommandSnapshot =>
     isRecord(value) && typeof value.commandCount === "number" && Array.isArray(value.commands)

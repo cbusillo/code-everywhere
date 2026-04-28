@@ -2,7 +2,14 @@ import { describe, expect, it } from "vitest"
 
 import type { RequestedInput } from "@code-everywhere/contracts"
 
-import { getDraftValue, getRequestedInputDefault, setDraftValue } from "./cockpitDrafts"
+import {
+    getDraftValue,
+    getRequestedInputAnswers,
+    getRequestedInputAnswerValues,
+    getRequestedInputDefault,
+    setDraftValue,
+    setRequestedInputAnswerValue,
+} from "./cockpitDrafts"
 
 describe("cockpit draft state", () => {
     it("keeps draft values keyed by active work", () => {
@@ -13,7 +20,7 @@ describe("cockpit draft state", () => {
         expect(getDraftValue(drafts, "session-c", "fallback")).toBe("fallback")
     })
 
-    it("uses the first requested-input option as the empty draft default", () => {
+    it("builds answers for every requested-input question", () => {
         const input: RequestedInput = {
             id: "input-1",
             sessionId: "session-1",
@@ -32,10 +39,30 @@ describe("cockpit draft state", () => {
                         { label: "Conservative", value: "conservative" },
                     ],
                 },
+                {
+                    id: "question-2",
+                    label: "Scope",
+                    prompt: "Pick a scope",
+                    required: true,
+                    options: [
+                        { label: "Current task", value: "current" },
+                        { label: "Whole project", value: "project" },
+                    ],
+                },
             ],
         }
+        const drafts = setRequestedInputAnswerValue({}, "input-1", "question-2", "project")
+        const values = getRequestedInputAnswerValues(drafts, input)
 
-        expect(getRequestedInputDefault(input)).toBe("recommended")
+        expect(getRequestedInputDefault(input.questions[0])).toBe("recommended")
         expect(getRequestedInputDefault(undefined)).toBe("")
+        expect(values).toEqual({
+            "question-1": "recommended",
+            "question-2": "project",
+        })
+        expect(getRequestedInputAnswers(input, values)).toEqual([
+            { questionId: "question-1", value: "recommended" },
+            { questionId: "question-2", value: "project" },
+        ])
     })
 })

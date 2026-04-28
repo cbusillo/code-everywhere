@@ -16,9 +16,13 @@ describe("cockpit command client", () => {
         expect(createCommandUrl("http://127.0.0.1:4789/")).toBe("http://127.0.0.1:4789/commands")
     })
 
-    it("posts commands whenever a transport URL is configured", () => {
-        expect(canPostCockpitCommand(null)).toBe(false)
-        expect(canPostCockpitCommand("http://127.0.0.1:4789")).toBe(true)
+    it("posts commands only after a live HTTP snapshot is available", () => {
+        expect(canPostCockpitCommand({ mode: "fixture", url: null, updatedAt: null, error: null })).toBe(false)
+        expect(canPostCockpitCommand({ mode: "connecting", url: "http://127.0.0.1:4789", updatedAt: null, error: null })).toBe(false)
+        expect(canPostCockpitCommand({ mode: "fallback", url: "http://127.0.0.1:4789", updatedAt: null, error: "offline" })).toBe(
+            false,
+        )
+        expect(canPostCockpitCommand({ mode: "live", url: "http://127.0.0.1:4789", updatedAt: "now", error: null })).toBe(true)
     })
 
     it("posts commands as JSON and validates the response", async () => {
