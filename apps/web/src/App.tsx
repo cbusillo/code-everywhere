@@ -35,7 +35,14 @@ import { useMemo, useState } from "react"
 
 import { canPostCockpitCommand, postCockpitCommand } from "./cockpitCommands"
 import { getAttentionSessions, statusLabels, type CockpitSession } from "./cockpitData"
-import { getDraftValue, getRequestedInputDefault, setDraftValue, type DraftMap } from "./cockpitDrafts"
+import {
+    getDraftValue,
+    getRequestedInputAnswers,
+    getRequestedInputAnswerValues,
+    setDraftValue,
+    setRequestedInputAnswerValue,
+    type DraftMap,
+} from "./cockpitDrafts"
 import { describeTransportStatus, useCockpitView, type CockpitTransportStatus } from "./cockpitTransport"
 
 const selectedSessionId = "ce-alpha"
@@ -85,7 +92,7 @@ export const App = () => {
     const [activeSessionId, setActiveSessionId] = useState(selectedSessionId)
     const [replyDrafts, setReplyDrafts] = useState<DraftMap>({})
     const [inputAnswerDrafts, setInputAnswerDrafts] = useState<DraftMap>({})
-    const [commandLog, setCommandLog] = useState("No mocked command sent yet")
+    const [commandLog, setCommandLog] = useState("No command sent yet")
     const fallbackSession = cockpit.sessions[0]
     const activeSession =
         fallbackSession === undefined
@@ -95,7 +102,7 @@ export const App = () => {
     const activeApproval = cockpit.approvals.find((approval) => approval.sessionId === activeSession?.sessionId)
     const activeInput = cockpit.requestedInputs.find((input) => input.sessionId === activeSession?.sessionId)
     const reply = getDraftValue(replyDrafts, activeSession?.sessionId)
-    const inputAnswer = getDraftValue(inputAnswerDrafts, activeInput?.id, getRequestedInputDefault(activeInput))
+    const inputAnswerValues = getRequestedInputAnswerValues(inputAnswerDrafts, activeInput)
 
     const setReply = (value: string) => {
         if (activeSession === undefined) {
@@ -105,23 +112,22 @@ export const App = () => {
         setReplyDrafts((drafts) => setDraftValue(drafts, activeSession.sessionId, value))
     }
 
-    const setInputAnswer = (value: string) => {
+    const setInputAnswer = (questionId: string, value: string) => {
         if (activeInput === undefined) {
             return
         }
 
-        setInputAnswerDrafts((drafts) => setDraftValue(drafts, activeInput.id, value))
+        setInputAnswerDrafts((drafts) => setRequestedInputAnswerValue(drafts, activeInput.id, questionId, value))
     }
 
     const dispatchCommand = (label: string, command: SessionCommand) => {
-        const transportUrl = cockpitView.transport.url
-        if (!canPostCockpitCommand(transportUrl)) {
-            setCommandLog(`${label} mocked for ${command.sessionId} at epoch ${command.sessionEpoch}`)
+        if (!canPostCockpitCommand(cockpitView.transport)) {
+            setCommandLog(`${label} requires a live HTTP snapshot for ${command.sessionId}`)
             return
         }
 
         setCommandLog(`Sending ${label} for ${command.sessionId} at epoch ${command.sessionEpoch}`)
-        void postCockpitCommand(transportUrl, command)
+        void postCockpitCommand(cockpitView.transport.url, command)
             .then((snapshot) => {
                 setCommandLog(
                     `${label} sent for ${command.sessionId} at epoch ${command.sessionEpoch}; ${String(snapshot.commandCount)} queued`,
@@ -176,7 +182,7 @@ export const App = () => {
                                 session={activeSession}
                                 approval={activeApproval}
                                 requestedInput={activeInput}
-                                inputAnswer={inputAnswer}
+                                inputAnswerValues={inputAnswerValues}
                                 setInputAnswer={setInputAnswer}
                                 commandLog={commandLog}
                                 dispatchCommand={dispatchCommand}
@@ -381,8 +387,8 @@ type ActionRailProps = {
     session: CockpitSession
     approval: PendingApproval | undefined
     requestedInput: RequestedInput | undefined
-    inputAnswer: string
-    setInputAnswer: (value: string) => void
+    inputAnswerValues: Record<string, string>
+    setInputAnswer: (questionId: string, value: string) => void
     commandLog: string
     dispatchCommand: (label: string, command: SessionCommand) => void
 }
@@ -391,7 +397,7 @@ const ActionRail = ({
     session,
     approval,
     requestedInput,
-    inputAnswer,
+    inputAnswerValues,
     setInputAnswer,
     commandLog,
     dispatchCommand,
@@ -417,7 +423,7 @@ const ActionRail = ({
             {requestedInput === undefined ? null : (
                 <RequestedInputCard
                     input={requestedInput}
-                    value={inputAnswer}
+                    values={inputAnswerValues}
                     setValue={setInputAnswer}
                     dispatchCommand={dispatchCommand}
                 />
@@ -519,15 +525,13 @@ const ApprovalCard = ({
 
 type RequestedInputCardProps = {
     input: RequestedInput
-    value: string
-    setValue: (value: string) => void
+    values: Record<string, string>
+    setValue: (questionId: string, value: string) => void
     dispatchCommand: (label: string, command: SessionCommand) => void
 }
 
-const RequestedInputCard = ({ input, value, setValue, dispatchCommand }: RequestedInputCardProps) => {
-    const question = input.questions[0]
-
-    if (question === undefined) {
+const RequestedInputCard = ({ input, values, setValue, dispatchCommand }: RequestedInputCardProps) => {
+    if (input.questions.length === 0) {
         return null
     }
 
@@ -540,24 +544,26 @@ const RequestedInputCard = ({ input, value, setValue, dispatchCommand }: Request
                     <p>{formatTime(input.requestedAt)}</p>
                 </div>
             </div>
-            <fieldset>
-                <legend>{question.prompt}</legend>
-                {question.options.map((option) => (
-                    <label className="choice-row" key={option.value}>
-                        <input
-                            type="radio"
-                            name={question.id}
-                            value={option.value}
-                            checked={value === option.value}
-                            onChange={() => setValue(option.value)}
-                        />
-                        <span>
-                            <strong>{option.label}</strong>
-                            <small>{option.description}</small>
-                        </span>
-                    </label>
-                ))}
-            </fieldset>
+            {input.questions.map((question) => (
+                <fieldset key={question.id}>
+                    <legend>{question.prompt}</legend>
+                    {question.options.map((option) => (
+                        <label className="choice-row" key={option.value}>
+                            <input
+                                type="radio"
+                                name={`${input.id}-${question.id}`}
+                                value={option.value}
+                                checked={values[question.id] === option.value}
+                                onChange={() => setValue(question.id, option.value)}
+                            />
+                            <span>
+                                <strong>{option.label}</strong>
+                                <small>{option.description}</small>
+                            </span>
+                        </label>
+                    ))}
+                </fieldset>
+            ))}
             <label className="freeform-label" htmlFor="input-freeform">
                 Optional note
             </label>
@@ -571,12 +577,7 @@ const RequestedInputCard = ({ input, value, setValue, dispatchCommand }: Request
                         sessionId: input.sessionId,
                         sessionEpoch: input.sessionEpoch,
                         turnId: input.turnId,
-                        answers: [
-                            {
-                                questionId: question.id,
-                                value,
-                            },
-                        ],
+                        answers: getRequestedInputAnswers(input, values),
                     })
                 }
             >
