@@ -224,6 +224,56 @@ describe("cockpit command store", () => {
         })
     })
 
+    it("claims undelivered commands once and can filter by session", () => {
+        const timestamps = [
+            "2026-04-27T16:20:00.000Z",
+            "2026-04-27T16:21:00.000Z",
+            "2026-04-27T16:22:00.000Z",
+            "2026-04-27T16:23:00.000Z",
+        ]
+        const store = createCockpitCommandStore([], {
+            now: () => new Date(timestamps.shift() ?? "2026-04-27T16:24:00.000Z"),
+            createId: (index) => `test-command-${String(index)}`,
+        })
+        const otherCommand: SessionCommand = {
+            ...baseCommand,
+            sessionId: "session-2",
+            content: "Handle the other session.",
+        }
+
+        store.enqueue(baseCommand)
+        store.enqueue(otherCommand)
+
+        expect(store.claimUndelivered({ sessionId: "session-1" })).toEqual({
+            claimedAt: "2026-04-27T16:22:00.000Z",
+            commandCount: 1,
+            commands: [
+                {
+                    id: "test-command-1",
+                    receivedAt: "2026-04-27T16:20:00.000Z",
+                    deliveredAt: "2026-04-27T16:22:00.000Z",
+                    command: baseCommand,
+                },
+            ],
+        })
+        expect(store.claimUndelivered()).toMatchObject({
+            claimedAt: "2026-04-27T16:23:00.000Z",
+            commandCount: 1,
+            commands: [
+                {
+                    id: "test-command-2",
+                    deliveredAt: "2026-04-27T16:23:00.000Z",
+                    command: otherCommand,
+                },
+            ],
+        })
+        expect(store.claimUndelivered()).toMatchObject({ commandCount: 0, commands: [] })
+        expect(store.getSnapshot().commands.map((record) => record.deliveredAt)).toEqual([
+            "2026-04-27T16:22:00.000Z",
+            "2026-04-27T16:23:00.000Z",
+        ])
+    })
+
     it("resets and returns defensive copies", () => {
         const command: SessionCommand = {
             kind: "request_user_input_response",

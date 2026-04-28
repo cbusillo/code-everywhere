@@ -44,8 +44,19 @@ export type CockpitCommandSnapshot = {
     commands: CockpitCommandRecord[]
 }
 
+export type CockpitCommandClaim = {
+    claimedAt: string
+    commandCount: number
+    commands: CockpitCommandRecord[]
+}
+
+export type CockpitCommandClaimFilter = {
+    sessionId?: SessionId
+}
+
 export type CockpitCommandStore = {
     enqueue: (command: SessionCommand) => CockpitCommandSnapshot
+    claimUndelivered: (filter?: CockpitCommandClaimFilter) => CockpitCommandClaim
     getSnapshot: () => CockpitCommandSnapshot
     getCommands: () => CockpitCommandRecord[]
     reset: (commands?: SessionCommand[]) => CockpitCommandSnapshot
@@ -112,6 +123,30 @@ export const createCockpitCommandStore = (
         commands: commands.map(cloneCommandRecord),
     })
 
+    const claimUndelivered = (filter: CockpitCommandClaimFilter = {}): CockpitCommandClaim => {
+        const claimedAt = now().toISOString()
+        const claimedCommands: CockpitCommandRecord[] = []
+
+        commands = commands.map((record) => {
+            if (record.deliveredAt !== null || (filter.sessionId !== undefined && record.command.sessionId !== filter.sessionId)) {
+                return record
+            }
+
+            const claimedRecord = {
+                ...record,
+                deliveredAt: claimedAt,
+            }
+            claimedCommands.push(claimedRecord)
+            return claimedRecord
+        })
+
+        return {
+            claimedAt,
+            commandCount: claimedCommands.length,
+            commands: claimedCommands.map(cloneCommandRecord),
+        }
+    }
+
     const enqueue = (command: SessionCommand): CockpitCommandSnapshot => {
         commands = [
             ...commands,
@@ -135,6 +170,7 @@ export const createCockpitCommandStore = (
 
     const store = {
         enqueue,
+        claimUndelivered,
         getSnapshot,
         getCommands: () => commands.map(cloneCommandRecord),
         reset,

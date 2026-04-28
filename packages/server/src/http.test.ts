@@ -325,6 +325,58 @@ describe("cockpit HTTP transport", () => {
         expect(body.commands.map((record) => record.command.kind)).toEqual(["approval_decision"])
     })
 
+    it("claims undelivered commands for local consumers", async () => {
+        const firstCommand: SessionCommand = {
+            kind: "reply",
+            sessionId: "session-1",
+            sessionEpoch: "epoch-1",
+            content: "Continue the current turn.",
+        }
+        const secondCommand: SessionCommand = {
+            kind: "status_request",
+            sessionId: "session-2",
+            sessionEpoch: "epoch-1",
+        }
+
+        await sendJson(baseUrl, "POST", "/commands", { command: firstCommand })
+        await sendJson(baseUrl, "POST", "/commands", { command: secondCommand })
+
+        const filteredClaim = await sendJson(baseUrl, "POST", "/commands/claim", { sessionId: "session-1" })
+        expect(filteredClaim.statusCode).toBe(200)
+        expect(filteredClaim.body).toEqual({
+            claimedAt: "2026-04-27T16:20:00.000Z",
+            commandCount: 1,
+            commands: [
+                {
+                    id: "test-command-1",
+                    receivedAt: "2026-04-27T16:20:00.000Z",
+                    deliveredAt: "2026-04-27T16:20:00.000Z",
+                    command: firstCommand,
+                },
+            ],
+        })
+
+        const remainingClaim = await sendJson(baseUrl, "POST", "/commands/claim")
+        expect(remainingClaim.body).toMatchObject({
+            commandCount: 1,
+            commands: [
+                {
+                    id: "test-command-2",
+                    deliveredAt: "2026-04-27T16:20:00.000Z",
+                    command: secondCommand,
+                },
+            ],
+        })
+        expect((await sendJson(baseUrl, "POST", "/commands/claim")).body).toMatchObject({ commandCount: 0, commands: [] })
+        expect((await sendJson(baseUrl, "GET", "/commands")).body).toMatchObject({
+            commandCount: 2,
+            commands: [
+                { id: "test-command-1", deliveredAt: "2026-04-27T16:20:00.000Z" },
+                { id: "test-command-2", deliveredAt: "2026-04-27T16:20:00.000Z" },
+            ],
+        })
+    })
+
     it("rejects invalid session commands", async () => {
         const invalidCommands = [
             { nope: true },
@@ -359,6 +411,14 @@ describe("cockpit HTTP transport", () => {
         await expect(sendJson(baseUrl, "PATCH", "/commands", {})).resolves.toMatchObject({
             statusCode: 405,
             body: { error: "Method not allowed" },
+        })
+        await expect(sendJson(baseUrl, "GET", "/commands/claim")).resolves.toMatchObject({
+            statusCode: 405,
+            body: { error: "Method not allowed" },
+        })
+        await expect(sendJson(baseUrl, "POST", "/commands/claim", { sessionId: 42 })).resolves.toMatchObject({
+            statusCode: 400,
+            body: { error: "Expected command claim payload to be empty or contain a sessionId" },
         })
         expect((await sendJson(baseUrl, "GET", "/commands")).body).toEqual({ commandCount: 0, commands: [] })
     })
