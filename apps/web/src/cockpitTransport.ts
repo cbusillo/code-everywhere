@@ -14,7 +14,7 @@ import type {
     TurnStatus,
     TurnStep,
 } from "@code-everywhere/contracts"
-import type { CockpitCommandSnapshot, CockpitIngestionSnapshot } from "@code-everywhere/server"
+import type { CockpitCommandRecord, CockpitCommandSnapshot, CockpitIngestionSnapshot } from "@code-everywhere/server"
 
 import { fetchCockpitCommands } from "./cockpitCommands"
 import { cockpitFixture, createCockpitFixtureFromSnapshot, type CockpitFixture } from "./cockpitData"
@@ -87,28 +87,52 @@ export const useCockpitView = (options: UseCockpitViewOptions = {}): CockpitView
 
         const scheduler = createCockpitPollScheduler()
         let isActive = true
+        let commandRequestId = 0
 
         const loadSnapshot = async () => {
             try {
-                const [snapshot, commands] = await Promise.all([
-                    fetchSnapshot(transportUrl),
-                    fetchCommands(transportUrl).catch(() => ({ commandCount: 0, commands: [] })),
-                ])
+                const snapshot = await fetchSnapshot(transportUrl)
                 if (!isActive) {
                     return
                 }
 
                 const loadedAt = getNow(now)
 
-                setState({
-                    fixture: createCockpitFixtureFromSnapshot(snapshot, { generatedAt: loadedAt, commands: commands.commands }),
+                setState((current) => ({
+                    fixture: createCockpitFixtureFromSnapshot(snapshot, {
+                        generatedAt: loadedAt,
+                        commands: current.transport.url === transportUrl ? current.fixture.commands : [],
+                    }),
                     transport: {
                         mode: "live",
                         url: transportUrl,
                         updatedAt: loadedAt,
                         error: null,
                     },
-                })
+                }))
+
+                const requestId = (commandRequestId += 1)
+                void fetchCommands(transportUrl)
+                    .then((commands) => {
+                        if (!isActive || requestId !== commandRequestId) {
+                            return
+                        }
+
+                        setState((current) => {
+                            if (current.transport.url !== transportUrl || current.transport.mode !== "live") {
+                                return current
+                            }
+
+                            return {
+                                ...current,
+                                fixture: {
+                                    ...current.fixture,
+                                    commands: sortCommandRecords(commands.commands),
+                                },
+                            }
+                        })
+                    })
+                    .catch(() => undefined)
             } catch (error) {
                 if (!isActive) {
                     return
@@ -363,6 +387,9 @@ const isStaleCockpitEvent = (value: unknown): value is StaleCockpitEvent =>
 
 const isRecordOf = <Value>(value: unknown, guard: (entry: unknown) => entry is Value): value is Record<string, Value> =>
     isRecord(value) && Object.values(value).every(guard)
+
+const sortCommandRecords = (commands: CockpitCommandRecord[]): CockpitCommandRecord[] =>
+    [...commands].sort((left, right) => right.receivedAt.localeCompare(left.receivedAt))
 
 const isArrayOf = <Value>(value: unknown, guard: (entry: unknown) => entry is Value): value is Value[] =>
     Array.isArray(value) && value.every(guard)
