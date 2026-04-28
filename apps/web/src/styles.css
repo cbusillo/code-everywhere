@@ -311,6 +311,31 @@ code {
     background: var(--bg-base);
 }
 
+.empty-cockpit-panel {
+    justify-content: center;
+    padding: 20px;
+}
+
+.empty-cockpit-card {
+    display: grid;
+    gap: 8px;
+    max-width: 420px;
+}
+
+.empty-cockpit-card h2 {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 680;
+    letter-spacing: 0;
+}
+
+.empty-cockpit-card p:not(.eyebrow) {
+    margin: 0;
+    color: var(--fg-2);
+    font-size: 13px;
+    line-height: 1.45;
+}
+
 .detail-header,
 .metadata-strip,
 .reply-box {
@@ -1013,6 +1038,10 @@ legend {
     gap: 8px;
     margin-top: 10px;
     padding: 10px;
+}
+
+.session-empty {
+    align-items: center;
 }
 
 .empty-state p,

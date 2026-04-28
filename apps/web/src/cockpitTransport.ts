@@ -18,6 +18,11 @@ export type CockpitViewState = {
     transport: CockpitTransportStatus
 }
 
+export type CockpitPollRequestTracker = {
+    startRequest: () => number
+    isCurrentRequest: (requestId: number) => boolean
+}
+
 type UseCockpitViewOptions = {
     transportUrl?: string
     pollIntervalMs?: number
@@ -64,12 +69,15 @@ export const useCockpitView = (options: UseCockpitViewOptions = {}): CockpitView
         }
 
         let cancelled = false
+        const requestTracker = createCockpitPollRequestTracker()
 
         const loadSnapshot = async () => {
+            const requestId = requestTracker.startRequest()
+
             try {
                 const snapshot = await fetchSnapshot(transportUrl)
                 const loadedAt = getNow(now)
-                if (cancelled) {
+                if (cancelled || !requestTracker.isCurrentRequest(requestId)) {
                     return
                 }
 
@@ -83,7 +91,7 @@ export const useCockpitView = (options: UseCockpitViewOptions = {}): CockpitView
                     },
                 })
             } catch (error) {
-                if (cancelled) {
+                if (cancelled || !requestTracker.isCurrentRequest(requestId)) {
                     return
                 }
 
@@ -110,6 +118,18 @@ export const useCockpitView = (options: UseCockpitViewOptions = {}): CockpitView
     }, [fetchSnapshot, now, pollIntervalMs, transportUrl])
 
     return state
+}
+
+export const createCockpitPollRequestTracker = (): CockpitPollRequestTracker => {
+    let latestRequestId = 0
+
+    return {
+        startRequest: () => {
+            latestRequestId += 1
+            return latestRequestId
+        },
+        isCurrentRequest: (requestId) => requestId === latestRequestId,
+    }
 }
 
 export const fetchCockpitSnapshot = async (

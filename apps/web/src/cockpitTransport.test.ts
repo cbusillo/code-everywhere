@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest"
 
-import { cockpitFixtureSnapshot } from "./cockpitData"
-import { createSnapshotUrl, describeTransportStatus, fetchCockpitSnapshot, normalizeTransportUrl } from "./cockpitTransport"
+import { cockpitFixtureSnapshot, createCockpitFixtureFromSnapshot } from "./cockpitData"
+import {
+    createCockpitPollRequestTracker,
+    createSnapshotUrl,
+    describeTransportStatus,
+    fetchCockpitSnapshot,
+    normalizeTransportUrl,
+} from "./cockpitTransport"
 
 describe("cockpit HTTP transport client", () => {
     it("builds snapshot URLs from a configured transport root", () => {
@@ -27,6 +33,37 @@ describe("cockpit HTTP transport client", () => {
             attentionSessionIds: cockpitFixtureSnapshot.attentionSessionIds,
         })
         expect(requests).toEqual(["http://127.0.0.1:4789/snapshot"])
+    })
+
+    it("keeps empty snapshots as valid live cockpit state", () => {
+        const fixture = createCockpitFixtureFromSnapshot({
+            eventCount: 0,
+            state: {
+                sessions: {},
+                turns: {},
+                pendingApprovals: {},
+                requestedInputs: {},
+                notifications: [],
+                staleEvents: [],
+            },
+            sessions: [],
+            attentionSessionIds: [],
+        })
+
+        expect(fixture).toMatchObject({
+            sessions: [],
+            approvals: [],
+            requestedInputs: [],
+        })
+    })
+
+    it("tracks only the latest poll request as current", () => {
+        const tracker = createCockpitPollRequestTracker()
+        const firstRequest = tracker.startRequest()
+        const secondRequest = tracker.startRequest()
+
+        expect(tracker.isCurrentRequest(firstRequest)).toBe(false)
+        expect(tracker.isCurrentRequest(secondRequest)).toBe(true)
     })
 
     it("rejects failed or malformed snapshot responses", async () => {

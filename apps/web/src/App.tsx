@@ -77,17 +77,20 @@ export const App = () => {
     const [inputAnswer, setInputAnswer] = useState("pending-work")
     const [commandLog, setCommandLog] = useState("No mocked command sent yet")
     const fallbackSession = cockpit.sessions[0]
-
-    if (fallbackSession === undefined) {
-        throw new Error("The cockpit fixture must include at least one session")
-    }
-
-    const activeSession = cockpit.sessions.find((session) => session.sessionId === activeSessionId) ?? fallbackSession
+    const activeSession =
+        fallbackSession === undefined
+            ? undefined
+            : (cockpit.sessions.find((session) => session.sessionId === activeSessionId) ?? fallbackSession)
     const attentionSessions = useMemo(() => getAttentionSessions(cockpit.sessions), [cockpit.sessions])
-    const activeApproval = cockpit.approvals.find((approval) => approval.sessionId === activeSession.sessionId)
-    const activeInput = cockpit.requestedInputs.find((input) => input.sessionId === activeSession.sessionId)
+    const activeApproval = cockpit.approvals.find((approval) => approval.sessionId === activeSession?.sessionId)
+    const activeInput = cockpit.requestedInputs.find((input) => input.sessionId === activeSession?.sessionId)
 
     const logCommand = (label: string) => {
+        if (activeSession === undefined) {
+            setCommandLog(`${label} ignored because no live session is selected`)
+            return
+        }
+
         setCommandLog(`${label} mocked for ${activeSession.sessionId} at epoch ${activeSession.sessionEpoch}`)
     }
 
@@ -115,19 +118,28 @@ export const App = () => {
                 <section className="cockpit-grid" aria-label="Every Code sessions cockpit">
                     <SessionList
                         sessions={cockpit.sessions}
-                        activeSessionId={activeSession.sessionId}
+                        activeSessionId={activeSession?.sessionId ?? ""}
                         onSelect={setActiveSessionId}
                     />
-                    <SessionDetail session={activeSession} reply={reply} setReply={setReply} logCommand={logCommand} />
-                    <ActionRail
-                        session={activeSession}
-                        approval={activeApproval}
-                        requestedInput={activeInput}
-                        inputAnswer={inputAnswer}
-                        setInputAnswer={setInputAnswer}
-                        commandLog={commandLog}
-                        logCommand={logCommand}
-                    />
+                    {activeSession === undefined ? (
+                        <>
+                            <EmptySessionDetail transport={cockpitView.transport} />
+                            <EmptyActionRail transport={cockpitView.transport} commandLog={commandLog} />
+                        </>
+                    ) : (
+                        <>
+                            <SessionDetail session={activeSession} reply={reply} setReply={setReply} logCommand={logCommand} />
+                            <ActionRail
+                                session={activeSession}
+                                approval={activeApproval}
+                                requestedInput={activeInput}
+                                inputAnswer={inputAnswer}
+                                setInputAnswer={setInputAnswer}
+                                commandLog={commandLog}
+                                logCommand={logCommand}
+                            />
+                        </>
+                    )}
                 </section>
             </div>
         </main>
@@ -151,6 +163,12 @@ const SessionList = ({ sessions, activeSessionId, onSelect }: SessionListProps) 
         </div>
 
         <div className="session-stack">
+            {sessions.length === 0 ? (
+                <div className="empty-state session-empty">
+                    <Check size={16} />
+                    <p>No trusted sessions in this snapshot.</p>
+                </div>
+            ) : null}
             {sessions.map((session) => (
                 <button
                     className={`session-row ${statusTone[session.status]} ${session.sessionId === activeSessionId ? "is-active" : ""}`}
@@ -170,6 +188,50 @@ const SessionList = ({ sessions, activeSessionId, onSelect }: SessionListProps) 
                 </button>
             ))}
         </div>
+    </aside>
+)
+
+const EmptySessionDetail = ({ transport }: { transport: CockpitTransportStatus }) => (
+    <section className="panel detail-panel empty-cockpit-panel" aria-label="Active session detail">
+        <div className="empty-cockpit-card">
+            <p className="eyebrow">{describeTransportStatus(transport)}</p>
+            <h2>No active sessions</h2>
+            <p>The current snapshot is connected and healthy, but it does not contain any trusted Every Code sessions yet.</p>
+        </div>
+    </section>
+)
+
+const EmptyActionRail = ({ transport, commandLog }: { transport: CockpitTransportStatus; commandLog: string }) => (
+    <aside className="action-rail" aria-label="Pending work and actions">
+        <section className="panel work-panel priority-panel">
+            <div className="panel-heading">
+                <div>
+                    <p className="eyebrow">Pending work</p>
+                    <h2>Next action</h2>
+                </div>
+                <ChevronRight size={18} aria-hidden="true" />
+            </div>
+            <div className="empty-state">
+                <Check size={16} />
+                <p>
+                    No pending approval or requested input in the current {describeTransportStatus(transport).toLowerCase()}{" "}
+                    snapshot.
+                </p>
+            </div>
+        </section>
+
+        <section className="panel work-panel">
+            <div className="panel-heading">
+                <div>
+                    <p className="eyebrow">Status</p>
+                    <h2>Session control</h2>
+                </div>
+            </div>
+            <div className="mock-log">
+                <span>Mock command</span>
+                <p>{commandLog}</p>
+            </div>
+        </section>
     </aside>
 )
 
