@@ -308,7 +308,7 @@ export const projectCockpitEvent = (state: CockpitProjectionState, event: Cockpi
 
                 draft.turns[event.turnId] = {
                     ...turn,
-                    steps: [...turn.steps, event.step],
+                    steps: upsertTurnStep(turn.steps, event.step),
                 }
                 touchSession(draft, event.sessionId, event.step.timestamp)
             })
@@ -604,6 +604,16 @@ const removeSessionPendingItems = (state: CockpitProjectionState, sessionId: Ses
 }
 
 const appendUnique = <Value>(values: Value[], value: Value): Value[] => (values.includes(value) ? values : [...values, value])
+
+const upsertTurnStep = (steps: TurnStep[], step: TurnStep): TurnStep[] => {
+    const existingIndex = steps.findIndex((candidate) => candidate.id === step.id)
+
+    if (existingIndex === -1) {
+        return [...steps, step]
+    }
+
+    return steps.map((candidate, index) => (index === existingIndex ? step : candidate))
+}
 
 const appendNotification = (notifications: CockpitNotification[], notification: CockpitNotification): CockpitNotification[] =>
     notifications.some((candidate) => candidate.id === notification.id) ? notifications : [...notifications, notification]
