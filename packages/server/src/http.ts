@@ -49,6 +49,14 @@ const routeRequest = async (
     store: CockpitEventStore,
     maxBodyBytes: number,
 ): Promise<void> => {
+    setCorsHeaders(response)
+
+    if (request.method === "OPTIONS") {
+        response.statusCode = 204
+        response.end()
+        return
+    }
+
     const url = parseRequestUrl(request)
 
     if (url.pathname === "/snapshot") {
@@ -313,6 +321,12 @@ const hasBoolean = (value: Record<string, unknown>, key: string): boolean => typ
 const writeMethodNotAllowed = (response: ServerResponse, allow: string): void => {
     response.setHeader("allow", allow)
     writeJson(response, 405, { error: "Method not allowed" })
+}
+
+const setCorsHeaders = (response: ServerResponse): void => {
+    response.setHeader("access-control-allow-origin", "*")
+    response.setHeader("access-control-allow-methods", "GET, POST, OPTIONS")
+    response.setHeader("access-control-allow-headers", "content-type, accept")
 }
 
 const writeJson = (response: ServerResponse, statusCode: number, payload: JsonResponse): void => {

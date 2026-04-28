@@ -867,7 +867,8 @@ legend {
     letter-spacing: 0;
 }
 
-.status-summary {
+.status-summary,
+.transport-summary {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -877,7 +878,8 @@ legend {
     padding: 5px 9px 5px 5px;
 }
 
-.status-summary span {
+.status-summary span,
+.transport-summary span {
     display: grid;
     width: 22px;
     height: 22px;
@@ -890,7 +892,27 @@ legend {
     font-weight: 700;
 }
 
-.status-summary p {
+.transport-summary span {
+    width: 10px;
+    height: 10px;
+    border: 0;
+    background: var(--fg-3);
+}
+
+.transport-summary.is-live span {
+    background: var(--success);
+}
+
+.transport-summary.is-connecting span {
+    background: var(--info);
+}
+
+.transport-summary.is-fallback span {
+    background: var(--warning);
+}
+
+.status-summary p,
+.transport-summary p {
     margin: 0;
     color: var(--fg-2);
     font-size: 12px;

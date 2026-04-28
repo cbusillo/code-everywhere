@@ -14,13 +14,18 @@ The goal is not to put a terminal in a browser. The goal is a structured cockpit
 
 ## Current Status
 
-This repository is a new product shell. It currently has shared contracts, an in-memory server ingestion/projection package, and a fake-data web cockpit so we can build the first live bridge deliberately.
+This repository is a new product shell. It currently has shared contracts, an
+in-memory server ingestion/projection package with a lightweight local HTTP
+transport, and a web cockpit that can use either projected fake data or a local
+HTTP snapshot.
 
 Workspace packages:
 
 - `packages/contracts`: shared session, turn, approval, requested-input, command, and projection types/helpers.
-- `packages/server`: in-memory cockpit event ingestion and snapshot projection boundary.
-- `apps/web`: React/Vite cockpit UI for fake and projected session data.
+- `packages/server`: in-memory cockpit event ingestion, snapshot projection, and
+  local HTTP transport boundary.
+- `apps/web`: React/Vite cockpit UI for projected fake data or local HTTP
+  snapshots.
 
 Useful entry points:
 
@@ -36,6 +41,14 @@ Useful entry points:
 corepack enable
 pnpm install
 pnpm validate
+```
+
+The web cockpit uses projected fake data by default. To point it at a local
+cockpit HTTP server, run Vite with `VITE_COCKPIT_HTTP_URL` set to the server
+root:
+
+```sh
+VITE_COCKPIT_HTTP_URL=http://127.0.0.1:4789 pnpm --filter @code-everywhere/web dev
 ```
 
 ## References

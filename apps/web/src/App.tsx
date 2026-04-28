@@ -25,7 +25,8 @@ import {
 } from "lucide-react"
 import { useMemo, useState } from "react"
 
-import { cockpitFixture, getAttentionSessions, statusLabels, type CockpitSession } from "./cockpitData"
+import { getAttentionSessions, statusLabels, type CockpitSession } from "./cockpitData"
+import { describeTransportStatus, useCockpitView, type CockpitTransportStatus } from "./cockpitTransport"
 
 const selectedSessionId = "ce-alpha"
 
@@ -69,20 +70,22 @@ const turnRailTone: Record<TurnStatus, string> = {
 }
 
 export const App = () => {
+    const cockpitView = useCockpitView()
+    const cockpit = cockpitView.fixture
     const [activeSessionId, setActiveSessionId] = useState(selectedSessionId)
     const [reply, setReply] = useState("")
     const [inputAnswer, setInputAnswer] = useState("pending-work")
     const [commandLog, setCommandLog] = useState("No mocked command sent yet")
-    const fallbackSession = cockpitFixture.sessions[0]
+    const fallbackSession = cockpit.sessions[0]
 
     if (fallbackSession === undefined) {
         throw new Error("The cockpit fixture must include at least one session")
     }
 
-    const activeSession = cockpitFixture.sessions.find((session) => session.sessionId === activeSessionId) ?? fallbackSession
-    const attentionSessions = useMemo(() => getAttentionSessions(cockpitFixture.sessions), [])
-    const activeApproval = cockpitFixture.approvals.find((approval) => approval.sessionId === activeSession.sessionId)
-    const activeInput = cockpitFixture.requestedInputs.find((input) => input.sessionId === activeSession.sessionId)
+    const activeSession = cockpit.sessions.find((session) => session.sessionId === activeSessionId) ?? fallbackSession
+    const attentionSessions = useMemo(() => getAttentionSessions(cockpit.sessions), [cockpit.sessions])
+    const activeApproval = cockpit.approvals.find((approval) => approval.sessionId === activeSession.sessionId)
+    const activeInput = cockpit.requestedInputs.find((input) => input.sessionId === activeSession.sessionId)
 
     const logCommand = (label: string) => {
         setCommandLog(`${label} mocked for ${activeSession.sessionId} at epoch ${activeSession.sessionEpoch}`)
@@ -96,6 +99,7 @@ export const App = () => {
                         <p className="eyebrow">Code Everywhere</p>
                     </div>
                     <div className="header-actions">
+                        <TransportSummary status={cockpitView.transport} />
                         <StatusSummary count={attentionSessions.length} />
                         <button
                             className="icon-button"
@@ -110,7 +114,7 @@ export const App = () => {
 
                 <section className="cockpit-grid" aria-label="Every Code sessions cockpit">
                     <SessionList
-                        sessions={cockpitFixture.sessions}
+                        sessions={cockpit.sessions}
                         activeSessionId={activeSession.sessionId}
                         onSelect={setActiveSessionId}
                     />
@@ -424,6 +428,13 @@ const StatusSummary = ({ count }: { count: number }) => (
     <div className="status-summary">
         <span>{count}</span>
         <p>sessions need attention</p>
+    </div>
+)
+
+const TransportSummary = ({ status }: { status: CockpitTransportStatus }) => (
+    <div className={`transport-summary is-${status.mode}`} title={status.error ?? status.url ?? describeTransportStatus(status)}>
+        <span aria-hidden="true" />
+        <p>{describeTransportStatus(status)}</p>
     </div>
 )
 
