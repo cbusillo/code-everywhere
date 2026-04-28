@@ -101,6 +101,46 @@ describe("cockpit projection", () => {
         expect(state.turns["turn-1"]?.steps).toHaveLength(1)
     })
 
+    it("keeps replayed turn steps idempotent", () => {
+        const step = {
+            id: "step-1",
+            kind: "message" as const,
+            title: "Assistant reply",
+            detail: "The same snapshot was replayed after reconnect.",
+            timestamp: "2026-04-27T16:02:00.000Z",
+            state: "completed" as const,
+        }
+
+        const state = projectCockpitEvents([
+            {
+                kind: "session_hello",
+                session: baseSession,
+            },
+            {
+                kind: "turn_started",
+                sessionEpoch: "epoch-1",
+                turn: baseTurn,
+            },
+            {
+                kind: "turn_step_added",
+                sessionId: "session-1",
+                sessionEpoch: "epoch-1",
+                turnId: "turn-1",
+                step,
+            },
+            {
+                kind: "turn_step_added",
+                sessionId: "session-1",
+                sessionEpoch: "epoch-1",
+                turnId: "turn-1",
+                step,
+            },
+        ])
+
+        expect(state.turns["turn-1"]?.steps).toEqual([step])
+        expect(state.sessions["session-1"]?.updatedAt).toBe("2026-04-27T16:02:00.000Z")
+    })
+
     it("projects approval and requested-input attention surfaces", () => {
         const state = projectCockpitEvents([
             {
