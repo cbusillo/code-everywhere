@@ -23,6 +23,10 @@ export type PersistentCockpitStores = {
     commandStore: CockpitCommandStore
 }
 
+export type CockpitPersistenceOptions = {
+    writeSnapshot?: (filePath: string, snapshot: CockpitPersistenceSnapshot) => void
+}
+
 export class CockpitPersistenceError extends Error {}
 
 const emptyPersistenceSnapshot = (): CockpitPersistenceSnapshot => ({
@@ -31,57 +35,57 @@ const emptyPersistenceSnapshot = (): CockpitPersistenceSnapshot => ({
     commands: [],
 })
 
-export const createPersistentCockpitStores = (filePath: string): PersistentCockpitStores => {
+export const createPersistentCockpitStores = (
+    filePath: string,
+    options: CockpitPersistenceOptions = {},
+): PersistentCockpitStores => {
+    const writeSnapshot = options.writeSnapshot ?? writeCockpitPersistenceFile
     const snapshot = readCockpitPersistenceFile(filePath)
-    const eventStore = createCockpitEventStore(snapshot.events)
-    const commandStore = createCockpitCommandStore([], { initialRecords: snapshot.commands })
+    let eventStore = createCockpitEventStore(snapshot.events)
+    let commandStore = createCockpitCommandStore([], { initialRecords: snapshot.commands })
+
+    const restore = (previousSnapshot: CockpitPersistenceSnapshot): void => {
+        eventStore = createCockpitEventStore(previousSnapshot.events)
+        commandStore = createCockpitCommandStore([], { initialRecords: previousSnapshot.commands })
+    }
+
+    const currentSnapshot = (): CockpitPersistenceSnapshot => ({
+        version: 1,
+        events: eventStore.getEvents(),
+        commands: commandStore.getCommands(),
+    })
 
     const persist = (): void => {
-        writeCockpitPersistenceFile(filePath, {
-            version: 1,
-            events: eventStore.getEvents(),
-            commands: commandStore.getCommands(),
-        })
+        writeSnapshot(filePath, currentSnapshot())
+    }
+
+    const persistOrRollback = <Value>(mutate: () => Value): Value => {
+        const previousSnapshot = currentSnapshot()
+
+        try {
+            const value = mutate()
+            persist()
+            return value
+        } catch (error) {
+            restore(previousSnapshot)
+            throw error
+        }
     }
 
     return {
         store: {
-            ingest: (event) => {
-                const nextSnapshot = eventStore.ingest(event)
-                persist()
-                return nextSnapshot
-            },
-            ingestMany: (events) => {
-                const nextSnapshot = eventStore.ingestMany(events)
-                persist()
-                return nextSnapshot
-            },
-            getSnapshot: eventStore.getSnapshot,
-            getEvents: eventStore.getEvents,
-            reset: (events) => {
-                const nextSnapshot = eventStore.reset(events)
-                persist()
-                return nextSnapshot
-            },
+            ingest: (event) => persistOrRollback(() => eventStore.ingest(event)),
+            ingestMany: (events) => persistOrRollback(() => eventStore.ingestMany(events)),
+            getSnapshot: () => eventStore.getSnapshot(),
+            getEvents: () => eventStore.getEvents(),
+            reset: (events) => persistOrRollback(() => eventStore.reset(events)),
         },
         commandStore: {
-            enqueue: (command) => {
-                const nextSnapshot = commandStore.enqueue(command)
-                persist()
-                return nextSnapshot
-            },
-            claimUndelivered: (filter) => {
-                const claim = commandStore.claimUndelivered(filter)
-                persist()
-                return claim
-            },
-            getSnapshot: commandStore.getSnapshot,
-            getCommands: commandStore.getCommands,
-            reset: (commands) => {
-                const nextSnapshot = commandStore.reset(commands)
-                persist()
-                return nextSnapshot
-            },
+            enqueue: (command) => persistOrRollback(() => commandStore.enqueue(command)),
+            claimUndelivered: (filter) => persistOrRollback(() => commandStore.claimUndelivered(filter)),
+            getSnapshot: () => commandStore.getSnapshot(),
+            getCommands: () => commandStore.getCommands(),
+            reset: (commands) => persistOrRollback(() => commandStore.reset(commands)),
         },
     }
 }
