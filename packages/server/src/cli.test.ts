@@ -45,6 +45,7 @@ describe("cockpit HTTP server CLI", () => {
         })
         expect(parseCockpitServerArgs(["--memory"], {})).toMatchObject({ dataFile: null })
         expect(parseCockpitServerArgs(["--", "--help"], {})).toMatchObject({ help: true })
+        expect(parseCockpitServerArgs(["--help"], { CODE_EVERYWHERE_PORT: "nope" })).toMatchObject({ help: true })
         expect(() => parseCockpitServerArgs([], { CODE_EVERYWHERE_PORT: "nope" })).toThrow("CODE_EVERYWHERE_PORT must")
     })
 

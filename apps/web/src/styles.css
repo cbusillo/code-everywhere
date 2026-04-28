@@ -1389,14 +1389,14 @@ legend {
     }
 
     .session-list {
-        order: 2;
+        order: 1;
         border-top: 1px solid var(--border-default);
         border-right: 0;
     }
 
     .action-rail {
-        order: 1;
-        border-top: 0;
+        order: 2;
+        border-top: 1px solid var(--border-default);
         border-bottom: 1px solid var(--border-default);
     }
 

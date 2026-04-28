@@ -37,6 +37,15 @@ Options:
 `
 
 export const parseCockpitServerArgs = (args: readonly string[], variables: NodeJS.ProcessEnv = env): CockpitServerCliOptions => {
+    if (isHelpRequest(args)) {
+        return {
+            host: defaultHost,
+            port: defaultPort,
+            dataFile: defaultDataFile,
+            help: true,
+        }
+    }
+
     let host = normalizeHost(variables.CODE_EVERYWHERE_HOST) ?? defaultHost
     let port: number | undefined
     let dataFile: string | null = normalizeValue(variables.CODE_EVERYWHERE_DATA_FILE) ?? defaultDataFile
@@ -102,6 +111,8 @@ export const parseCockpitServerArgs = (args: readonly string[], variables: NodeJ
         help,
     }
 }
+
+const isHelpRequest = (args: readonly string[]): boolean => args.includes("-h") || args.includes("--help")
 
 export const cockpitServerUrl = (host: string, port: number): string => {
     const connectHost = connectableHost(host)
