@@ -9,6 +9,7 @@ import type {
     TurnStatus,
     TurnStep,
 } from "@code-everywhere/contracts"
+import type { CockpitCommandRecord } from "@code-everywhere/server"
 import {
     AlertCircle,
     Bell,
@@ -49,6 +50,14 @@ import { describeTransportStatus, useCockpitView, type CockpitTransportStatus } 
 const selectedSessionId = "ce-alpha"
 
 type IconComponent = typeof CirclePlay
+
+type CommandHistoryEntry = {
+    id: string
+    label: string
+    state: "queued" | "delivered" | "accepted" | "rejected"
+    timestamp: string
+    detail: string
+}
 
 const statusIcon: Record<SessionStatus, IconComponent> = {
     running: CirclePlay,
@@ -102,7 +111,7 @@ export const App = () => {
     const attentionSessions = useMemo(() => getAttentionSessions(cockpit.sessions), [cockpit.sessions])
     const activeApproval = cockpit.approvals.find((approval) => approval.sessionId === activeSession?.sessionId)
     const activeInput = cockpit.requestedInputs.find((input) => input.sessionId === activeSession?.sessionId)
-    const activeCommandOutcome = getLatestCommandOutcome(cockpit.commandOutcomes, activeSession?.sessionId)
+    const activeCommandHistory = getCommandHistoryEntries(cockpit.commands, cockpit.commandOutcomes, activeSession)
     const reply = getDraftValue(replyDrafts, activeSession?.sessionId)
     const inputAnswerValues = getRequestedInputAnswerValues(inputAnswerDrafts, activeInput)
 
@@ -187,7 +196,7 @@ export const App = () => {
                                 inputAnswerValues={inputAnswerValues}
                                 setInputAnswer={setInputAnswer}
                                 commandLog={commandLog}
-                                commandOutcome={activeCommandOutcome}
+                                commandHistory={activeCommandHistory}
                                 dispatchCommand={dispatchCommand}
                             />
                         </>
@@ -393,7 +402,7 @@ type ActionRailProps = {
     inputAnswerValues: Record<string, string>
     setInputAnswer: (questionId: string, value: string) => void
     commandLog: string
-    commandOutcome: CommandOutcome | undefined
+    commandHistory: CommandHistoryEntry[]
     dispatchCommand: (label: string, command: SessionCommand) => void
 }
 
@@ -404,7 +413,7 @@ const ActionRail = ({
     inputAnswerValues,
     setInputAnswer,
     commandLog,
-    commandOutcome,
+    commandHistory,
     dispatchCommand,
 }: ActionRailProps) => (
     <aside className="action-rail" aria-label="Pending work and actions">
@@ -463,7 +472,7 @@ const ActionRail = ({
             <div className="mock-log" aria-live="polite">
                 <span>Command status</span>
                 <p>{commandLog}</p>
-                {commandOutcome === undefined ? null : <p>{formatCommandOutcome(commandOutcome)}</p>}
+                <CommandHistory entries={commandHistory} />
             </div>
             <div className="epoch-note">
                 <AlertCircle size={16} />
@@ -695,18 +704,74 @@ const EndSessionButton = ({ onEnd }: { onEnd: () => void }) => (
     </Dialog.Root>
 )
 
-const getLatestCommandOutcome = (outcomes: CommandOutcome[], sessionId: string | undefined): CommandOutcome | undefined => {
-    if (sessionId === undefined) {
-        return undefined
+const CommandHistory = ({ entries }: { entries: CommandHistoryEntry[] }) => {
+    if (entries.length === 0) {
+        return <p>No retained commands for this session.</p>
     }
 
-    return outcomes.find((outcome) => outcome.sessionId === sessionId)
+    return (
+        <div className="command-history" aria-label="Recent command history">
+            {entries.map((entry) => (
+                <div className="command-history-row" key={entry.id}>
+                    <span className={`command-state is-${entry.state}`}>{entry.state}</span>
+                    <div>
+                        <strong>{entry.label}</strong>
+                        <p>
+                            {formatTime(entry.timestamp)} / {entry.detail}
+                        </p>
+                    </div>
+                </div>
+            ))}
+        </div>
+    )
 }
 
-const formatCommandOutcome = (outcome: CommandOutcome): string => {
-    const result = outcome.status === "accepted" ? "Accepted" : "Rejected"
-    const reason = outcome.reason === null || outcome.reason.trim() === "" ? "" : `: ${outcome.reason}`
-    return `${result} ${formatCommandKind(outcome.commandKind)} at ${formatTime(outcome.handledAt)}${reason}`
+const getCommandHistoryEntries = (
+    commands: CockpitCommandRecord[],
+    outcomes: CommandOutcome[],
+    session: CockpitSession | undefined,
+): CommandHistoryEntry[] => {
+    if (session === undefined) {
+        return []
+    }
+
+    const outcomesByCommandId = new Map(outcomes.map((outcome) => [outcome.commandId, outcome]))
+    const entries = commands
+        .filter((record) => record.command.sessionId === session.sessionId && record.command.sessionEpoch === session.sessionEpoch)
+        .map((record): CommandHistoryEntry => {
+            const outcome = outcomesByCommandId.get(record.id)
+            const state = outcome?.status ?? (record.deliveredAt === null ? "queued" : "delivered")
+            const timestamp = outcome?.handledAt ?? record.deliveredAt ?? record.receivedAt
+            const detail = outcome?.reason ?? (record.deliveredAt === null ? "Waiting for Every Code" : "Claimed by Every Code")
+
+            return {
+                id: record.id,
+                label: formatCommandKind(record.command.kind),
+                state,
+                timestamp,
+                detail,
+            }
+        })
+
+    const knownCommandIds = new Set(commands.map((record) => record.id))
+    const outcomeOnlyEntries = outcomes
+        .filter(
+            (outcome) =>
+                outcome.sessionId === session.sessionId &&
+                outcome.sessionEpoch === session.sessionEpoch &&
+                !knownCommandIds.has(outcome.commandId),
+        )
+        .map(
+            (outcome): CommandHistoryEntry => ({
+                id: outcome.commandId,
+                label: formatCommandKind(outcome.commandKind),
+                state: outcome.status,
+                timestamp: outcome.handledAt,
+                detail: outcome.reason ?? "Outcome reported by Every Code",
+            }),
+        )
+
+    return [...entries, ...outcomeOnlyEntries].sort((left, right) => right.timestamp.localeCompare(left.timestamp)).slice(0, 5)
 }
 
 const formatCommandKind = (kind: SessionCommand["kind"]): string =>

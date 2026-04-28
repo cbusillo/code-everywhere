@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import type { SessionCommand } from "@code-everywhere/contracts"
 
-import { canPostCockpitCommand, createCommandUrl, postCockpitCommand } from "./cockpitCommands"
+import { canPostCockpitCommand, createCommandUrl, fetchCockpitCommands, postCockpitCommand } from "./cockpitCommands"
 
 describe("cockpit command client", () => {
     const command: SessionCommand = {
@@ -57,16 +57,64 @@ describe("cockpit command client", () => {
         })
     })
 
+    it("fetches and validates retained command history", async () => {
+        const fetchImpl: Parameters<typeof fetchCockpitCommands>[1] = () =>
+            Promise.resolve(
+                new Response(
+                    JSON.stringify({
+                        commandCount: 1,
+                        commands: [
+                            {
+                                id: "command-1",
+                                receivedAt: "2026-04-27T16:20:00.000Z",
+                                deliveredAt: "2026-04-27T16:20:05.000Z",
+                                command,
+                            },
+                        ],
+                    }),
+                    { status: 200 },
+                ),
+            )
+
+        await expect(fetchCockpitCommands("http://127.0.0.1:4789", fetchImpl)).resolves.toMatchObject({
+            commandCount: 1,
+            commands: [{ id: "command-1", deliveredAt: "2026-04-27T16:20:05.000Z" }],
+        })
+    })
+
     it("rejects failed or malformed command responses", async () => {
         const failingFetch: Parameters<typeof postCockpitCommand>[2] = () => Promise.resolve(new Response("Nope", { status: 400 }))
         const malformedFetch: Parameters<typeof postCockpitCommand>[2] = () =>
             Promise.resolve(new Response(JSON.stringify({ commandCount: 1 }), { status: 200 }))
+        const malformedHistoryFetch: Parameters<typeof fetchCockpitCommands>[1] = () =>
+            Promise.resolve(
+                new Response(
+                    JSON.stringify({
+                        commandCount: 1,
+                        commands: [
+                            {
+                                id: "command-1",
+                                receivedAt: "2026-04-27T16:20:00.000Z",
+                                deliveredAt: null,
+                                command: {
+                                    ...command,
+                                    kind: "teleport",
+                                },
+                            },
+                        ],
+                    }),
+                    { status: 200 },
+                ),
+            )
 
         await expect(postCockpitCommand("http://127.0.0.1:4789", command, failingFetch)).rejects.toThrow(
             "Cockpit command request failed with 400",
         )
         await expect(postCockpitCommand("http://127.0.0.1:4789", command, malformedFetch)).rejects.toThrow(
             "Cockpit command response did not match the expected shape",
+        )
+        await expect(fetchCockpitCommands("http://127.0.0.1:4789", malformedHistoryFetch)).rejects.toThrow(
+            "Cockpit command history response did not match the expected shape",
         )
     })
 })

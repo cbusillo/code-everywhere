@@ -35,6 +35,24 @@ describe("cockpit HTTP transport client", () => {
         expect(requests).toEqual(["http://127.0.0.1:4789/snapshot"])
     })
 
+    it("keeps snapshots without command outcomes backward-compatible", async () => {
+        const legacyState: Record<string, unknown> = { ...cockpitFixtureSnapshot.state }
+        delete legacyState.commandOutcomes
+        const legacySnapshot = {
+            ...cockpitFixtureSnapshot,
+            state: legacyState,
+        }
+
+        const fetchImpl: Parameters<typeof fetchCockpitSnapshot>[1] = () =>
+            Promise.resolve(new Response(JSON.stringify(legacySnapshot), { status: 200 }))
+
+        await expect(fetchCockpitSnapshot("http://127.0.0.1:4789", fetchImpl)).resolves.toMatchObject({
+            state: {
+                commandOutcomes: {},
+            },
+        })
+    })
+
     it("keeps empty snapshots as valid live cockpit state", () => {
         const fixture = createCockpitFixtureFromSnapshot({
             eventCount: 0,
@@ -56,6 +74,7 @@ describe("cockpit HTTP transport client", () => {
             approvals: [],
             requestedInputs: [],
             commandOutcomes: [],
+            commands: [],
         })
     })
 
