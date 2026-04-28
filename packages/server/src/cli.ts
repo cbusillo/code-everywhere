@@ -33,7 +33,7 @@ Options:
 
 export const parseCockpitServerArgs = (args: readonly string[], variables: NodeJS.ProcessEnv = env): CockpitServerCliOptions => {
     let host = normalizeHost(variables.CODE_EVERYWHERE_HOST) ?? defaultHost
-    let port = parsePort(variables.CODE_EVERYWHERE_PORT, "CODE_EVERYWHERE_PORT") ?? defaultPort
+    let port: number | undefined
     let help = false
 
     for (let index = 0; index < args.length; index += 1) {
@@ -73,7 +73,7 @@ export const parseCockpitServerArgs = (args: readonly string[], variables: NodeJ
         throw new CockpitServerCliError(`Unknown option: ${arg ?? ""}`)
     }
 
-    return { host, port, help }
+    return { host, port: port ?? parsePort(variables.CODE_EVERYWHERE_PORT, "CODE_EVERYWHERE_PORT") ?? defaultPort, help }
 }
 
 export const cockpitServerUrl = (host: string, port: number): string => {

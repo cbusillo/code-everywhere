@@ -8,20 +8,32 @@
     "exports": {
         ".": {
             "types": "./src/index.ts",
+            "node": {
+                "development": "./src/index.ts",
+                "default": "./dist/index.js"
+            },
             "default": "./src/index.ts"
         },
         "./http": {
             "types": "./src/http.ts",
+            "node": {
+                "development": "./src/http.ts",
+                "default": "./dist/http.js"
+            },
             "default": "./src/http.ts"
         },
         "./http-client": {
             "types": "./src/http-client.ts",
+            "node": {
+                "development": "./src/http-client.ts",
+                "default": "./dist/http-client.js"
+            },
             "default": "./src/http-client.ts"
         }
     },
     "scripts": {
         "build": "tsc -p tsconfig.json",
-        "start": "pnpm build && node dist/cli.js",
+        "start": "pnpm --filter @code-everywhere/contracts build && pnpm build && node dist/cli.js",
         "typecheck": "tsc -p tsconfig.json --noEmit",
         "test": "vitest run src --passWithNoTests"
     },
