@@ -18,6 +18,8 @@ High-value areas:
 - Test: `pnpm test`
 - Broker projection smoke: `pnpm smoke:cockpit:turns`
 - Browser-backed broker/web smoke: `pnpm smoke:cockpit:web`
+- Retained/pruned browser smoke: `pnpm smoke:cockpit:retained-pruned`
+- Real TUI broker/web smoke: `pnpm smoke:cockpit:real-tui`
 - Full gate: `pnpm validate`
 
 ## Style

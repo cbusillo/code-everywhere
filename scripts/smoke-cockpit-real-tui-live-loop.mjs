@@ -1,0 +1,324 @@
+#!/usr/bin/env node
+
+import { mkdir, mkdtemp, rm } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import { spawn } from "node:child_process"
+import { createServer } from "node:net"
+import { exit, kill as killProcess, platform, stderr, stdout } from "node:process"
+import { setTimeout as delay } from "node:timers/promises"
+
+const smokePollIntervalMs = 500
+const processLogs = new WeakMap()
+
+const run = async () => {
+    const uiBrowser = await findCommand("ui-browser", "ui-browser is required for pnpm smoke:cockpit:real-tui")
+    const configuredCodeBinary = process.env.CODE_EVERYWHERE_CODE_BINARY?.trim()
+    const codeBinary =
+        configuredCodeBinary !== undefined && configuredCodeBinary !== ""
+            ? configuredCodeBinary
+            : await findCommand("code", "code is required for pnpm smoke:cockpit:real-tui")
+    const expectBinary = await findCommand("expect", "expect is required for pnpm smoke:cockpit:real-tui")
+    const session = `cockpit-real-tui-smoke-${String(process.pid)}-${String(Date.now())}`
+    const directory = await mkdtemp(join(tmpdir(), "code-everywhere-real-tui-smoke-"))
+    const workdir = join(directory, "work")
+    const brokerPort = await getFreePort()
+    const webPort = await getFreePort()
+    const brokerUrl = `http://127.0.0.1:${String(brokerPort)}`
+    const webUrl = `http://127.0.0.1:${String(webPort)}`
+    let broker = null
+    let web = null
+    let tui = null
+
+    try {
+        await mkdir(workdir, { recursive: true })
+        broker = startBroker(brokerPort)
+        await waitForHttp(`${brokerUrl}/snapshot`, "cockpit broker")
+        web = startWeb(webPort, brokerUrl)
+        await waitForHttp(webUrl, "web cockpit")
+
+        tui = startCodeTui(expectBinary, codeBinary, brokerUrl, workdir)
+        const tuiSession = await waitForTuiSession(brokerUrl)
+
+        await ui(uiBrowser, session, ["open", webUrl, "1000"])
+        await ui(uiBrowser, session, ["wait-for", "text=Connected to Code Everywhere.", "15000"])
+        await assertBrowserState(uiBrowser, session, {
+            mode: "Live HTTP",
+            hostLabel: "Smoke TUI",
+            summary: "Connected to Code Everywhere.",
+            sessionId: tuiSession.sessionId,
+        })
+
+        await clickFirstStatusButton(uiBrowser, session)
+        const outcome = await waitForCommandOutcome(brokerUrl, "status_request")
+        assertEqual(outcome.status, "accepted", "status command outcome")
+        assertEqual(outcome.sessionId, tuiSession.sessionId, "status command session")
+        assertEqual(outcome.sessionEpoch, tuiSession.sessionEpoch, "status command epoch")
+
+        await stopProcess(broker)
+        broker = null
+        await ui(uiBrowser, session, ["wait-for", "text=HTTP fallback", "10000"])
+        broker = startBroker(brokerPort)
+        await waitForHttp(`${brokerUrl}/snapshot`, "restarted cockpit broker")
+        const replayedSession = await waitForTuiSession(brokerUrl)
+        assertEqual(replayedSession.sessionId, tuiSession.sessionId, "replayed TUI session id")
+        assertEqual(replayedSession.sessionEpoch, tuiSession.sessionEpoch, "replayed TUI session epoch")
+        await ui(uiBrowser, session, ["wait-for", "text=Connected to Code Everywhere.", "15000"])
+        await assertBrowserState(uiBrowser, session, {
+            mode: "Live HTTP",
+            hostLabel: "Smoke TUI",
+            summary: "Connected to Code Everywhere.",
+            sessionId: tuiSession.sessionId,
+        })
+
+        stdout.write(
+            `Cockpit real TUI live-loop smoke passed at ${webUrl} using broker ${brokerUrl} and session ${tuiSession.sessionId}\n`,
+        )
+    } catch (error) {
+        stderr.write(`${error instanceof Error ? error.message : "Cockpit real TUI live-loop smoke failed"}\n`)
+        if (broker !== null) {
+            writeProcessLogs("Broker", broker)
+        }
+        if (web !== null) {
+            writeProcessLogs("Web", web)
+        }
+        if (tui !== null) {
+            writeProcessLogs("TUI", tui)
+        }
+        exit(1)
+    } finally {
+        await ui(uiBrowser, session, ["close"]).catch(() => undefined)
+        if (tui !== null) {
+            await stopProcess(tui)
+        }
+        if (web !== null) {
+            await stopProcess(web)
+        }
+        if (broker !== null) {
+            await stopProcess(broker)
+        }
+        await rm(directory, { recursive: true, force: true })
+    }
+}
+
+const startCodeTui = (expectBinary, codeBinary, brokerUrl, workdir) => {
+    const script = `
+set code_binary ${tclQuote(codeBinary)}
+set broker_url ${tclQuote(brokerUrl)}
+set host_label ${tclQuote("Smoke TUI")}
+set workdir ${tclQuote(workdir)}
+set timeout 45
+spawn $code_binary -c remote_inbox.enabled=true -c remote_inbox.code_everywhere_url=$broker_url -c remote_inbox.host_label=$host_label -C $workdir
+after 45000
+send "\\003"
+after 500
+send "\\003"
+expect eof
+`
+    return trackProcessLogs(
+        spawn(expectBinary, ["-c", script], {
+            detached: platform !== "win32",
+            stdio: ["ignore", "pipe", "pipe"],
+        }),
+    )
+}
+
+const tclQuote = (value) => `"${String(value).replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`
+
+const waitForTuiSession = async (brokerUrl) => {
+    const startedAt = Date.now()
+    while (Date.now() - startedAt < 20000) {
+        const snapshot = await getJson(`${brokerUrl}/snapshot`)
+        const session = snapshot.sessions.find((candidate) => candidate.hostLabel === "Smoke TUI")
+        if (session !== undefined) {
+            return session
+        }
+        await delay(250)
+    }
+    throw new Error("Timed out waiting for real TUI session hello")
+}
+
+const waitForCommandOutcome = async (brokerUrl, commandKind) => {
+    const startedAt = Date.now()
+    while (Date.now() - startedAt < 20000) {
+        const snapshot = await getJson(`${brokerUrl}/snapshot`)
+        const outcome = Object.values(snapshot.state.commandOutcomes).find((candidate) => candidate.commandKind === commandKind)
+        if (outcome !== undefined) {
+            return outcome
+        }
+        await delay(250)
+    }
+    throw new Error(`Timed out waiting for ${commandKind} command outcome from real TUI`)
+}
+
+const findCommand = async (command, errorMessage) => {
+    try {
+        return await runCommand("sh", ["-lc", `command -v ${command}`])
+    } catch {
+        throw new Error(errorMessage)
+    }
+}
+
+const startBroker = (port) =>
+    trackProcessLogs(
+        spawn("pnpm", ["--filter", "@code-everywhere/server", "start", "--", "--memory", "--port", String(port)], {
+            detached: platform !== "win32",
+            stdio: ["ignore", "pipe", "pipe"],
+        }),
+    )
+
+const startWeb = (port, brokerUrl) =>
+    trackProcessLogs(
+        spawn(
+            "pnpm",
+            ["--filter", "@code-everywhere/web", "exec", "vite", "--host", "127.0.0.1", "--port", String(port), "--strictPort"],
+            {
+                detached: platform !== "win32",
+                env: {
+                    ...process.env,
+                    VITE_COCKPIT_HTTP_URL: brokerUrl,
+                    VITE_COCKPIT_POLL_INTERVAL_MS: String(smokePollIntervalMs),
+                },
+                stdio: ["ignore", "pipe", "pipe"],
+            },
+        ),
+    )
+
+const trackProcessLogs = (child) => {
+    processLogs.set(child, "")
+    child.stdout.on("data", (chunk) => processLogs.set(child, `${processLogs.get(child) ?? ""}${String(chunk)}`))
+    child.stderr.on("data", (chunk) => processLogs.set(child, `${processLogs.get(child) ?? ""}${String(chunk)}`))
+    return child
+}
+
+const writeProcessLogs = (label, child) => {
+    const logs = String(processLogs.get(child) ?? "").trim()
+    if (logs !== "") {
+        stderr.write(`\n${label} output:\n${logs}\n`)
+    }
+}
+
+const stopProcess = async (child) => {
+    if (child.exitCode !== null) {
+        return
+    }
+    signalProcess(child, "SIGTERM")
+    const closed = await waitForClose(child, 3000)
+    if (!closed) {
+        signalProcess(child, "SIGKILL")
+        await waitForClose(child, 3000)
+    }
+}
+
+const signalProcess = (child, signal) => {
+    if (child.pid === undefined) {
+        return
+    }
+    try {
+        if (platform === "win32") {
+            child.kill(signal)
+        } else {
+            killProcess(-child.pid, signal)
+        }
+    } catch {
+        child.kill(signal)
+    }
+}
+
+const waitForClose = async (child, timeoutMs) => {
+    if (child.exitCode !== null) {
+        return true
+    }
+    return Promise.race([new Promise((resolve) => child.once("close", () => resolve(true))), delay(timeoutMs).then(() => false)])
+}
+
+const getFreePort = async () =>
+    new Promise((resolve, reject) => {
+        const server = createServer()
+        server.once("error", reject)
+        server.listen(0, "127.0.0.1", () => {
+            const address = server.address()
+            const port = typeof address === "object" && address !== null ? address.port : null
+            server.close(() => (port === null ? reject(new Error("Unable to reserve a local port")) : resolve(port)))
+        })
+    })
+
+const waitForHttp = async (url, label) => {
+    const startedAt = Date.now()
+    let lastError = null
+    while (Date.now() - startedAt < 30000) {
+        try {
+            const response = await globalThis.fetch(url, { cache: "no-store" })
+            if (response.ok) {
+                return
+            }
+            lastError = new Error(`${label} returned ${String(response.status)}`)
+        } catch (error) {
+            lastError = error
+        }
+        await delay(100)
+    }
+    throw new Error(`Timed out waiting for ${label}: ${lastError instanceof Error ? lastError.message : "not ready"}`)
+}
+
+const getJson = async (url) => {
+    const response = await globalThis.fetch(url, { headers: { accept: "application/json" } })
+    if (!response.ok) {
+        throw new Error(`GET ${url} failed with ${String(response.status)}`)
+    }
+    return response.json()
+}
+
+const ui = async (uiBrowser, session, args) => runCommand(uiBrowser, ["--session", session, ...args])
+
+const assertBrowserState = async (uiBrowser, session, expected) => {
+    const raw = await ui(uiBrowser, session, [
+        "eval",
+        "(() => ({ text: document.body.innerText, canScrollX: document.documentElement.scrollWidth > document.documentElement.clientWidth }))()",
+    ])
+    const state = JSON.parse(raw)
+    for (const [label, value] of Object.entries(expected)) {
+        if (!state.text.includes(value)) {
+            throw new Error(`Expected browser text to include ${label} ${JSON.stringify(value)}`)
+        }
+    }
+    if (state.canScrollX) {
+        throw new Error("Expected real TUI cockpit smoke to avoid horizontal overflow")
+    }
+}
+
+const clickFirstStatusButton = async (uiBrowser, session) => {
+    await ui(uiBrowser, session, [
+        "eval",
+        "(() => { const button = Array.from(document.querySelectorAll('button')).find((candidate) => candidate.innerText.trim() === 'Status'); if (!button) throw new Error('Status button not found'); button.click(); return true; })()",
+    ])
+}
+
+const assertEqual = (actual, expected, label) => {
+    if (actual !== expected) {
+        throw new Error(`Expected ${label} to be ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`)
+    }
+}
+
+const runCommand = async (command, args) =>
+    new Promise((resolve, reject) => {
+        const child = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"] })
+        let output = ""
+        let errorOutput = ""
+        child.stdout.on("data", (chunk) => {
+            output += String(chunk)
+        })
+        child.stderr.on("data", (chunk) => {
+            errorOutput += String(chunk)
+        })
+        child.once("error", reject)
+        child.once("close", (code) => {
+            if (code === 0) {
+                resolve(output.trim())
+                return
+            }
+            reject(new Error(`${command} ${args.join(" ")} failed with code ${String(code)}\n${errorOutput.trim()}`))
+        })
+    })
+
+await run()
