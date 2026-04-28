@@ -27,10 +27,14 @@ describe("cockpit HTTP server CLI", () => {
     it("rejects invalid options", () => {
         expect(() => parseCockpitServerArgs(["--port", "nope"], {})).toThrow(CockpitServerCliError)
         expect(() => parseCockpitServerArgs(["--host"], {})).toThrow("--host requires a value")
+        expect(() => parseCockpitServerArgs(["--host", "--port", "4900"], {})).toThrow("--host requires a value")
+        expect(() => parseCockpitServerArgs(["--port", "--host", "127.0.0.1"], {})).toThrow("--port requires a value")
         expect(() => parseCockpitServerArgs(["--wat"], {})).toThrow("Unknown option: --wat")
     })
 
-    it("formats IPv6 listen URLs", () => {
+    it("formats connectable listen URLs", () => {
+        expect(cockpitServerUrl("0.0.0.0", 4789)).toBe("http://127.0.0.1:4789")
+        expect(cockpitServerUrl("::", 4789)).toBe("http://[::1]:4789")
         expect(cockpitServerUrl("::1", 4789)).toBe("http://[::1]:4789")
         expect(cockpitServerUrl("127.0.0.1", 4789)).toBe("http://127.0.0.1:4789")
     })

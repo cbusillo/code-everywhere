@@ -77,7 +77,8 @@ export const parseCockpitServerArgs = (args: readonly string[], variables: NodeJ
 }
 
 export const cockpitServerUrl = (host: string, port: number): string => {
-    const urlHost = host.includes(":") && !host.startsWith("[") ? `[${host}]` : host
+    const connectHost = connectableHost(host)
+    const urlHost = connectHost.includes(":") && !connectHost.startsWith("[") ? `[${connectHost}]` : connectHost
     return `http://${urlHost}:${String(port)}`
 }
 
@@ -141,11 +142,27 @@ const readOptionValue = (args: readonly string[], index: number, option: string)
 
 const requireNonEmptyValue = (value: string | undefined, option: string): string => {
     const normalized = normalizeHost(value)
-    if (normalized === undefined) {
+    if (normalized === undefined || normalized.startsWith("-")) {
         throw new CockpitServerCliError(`${option} requires a value`)
     }
 
     return normalized
+}
+
+const connectableHost = (host: string): string => {
+    const normalized = host.trim()
+
+    switch (normalized) {
+        case "":
+        case "*":
+        case "0.0.0.0":
+            return "127.0.0.1"
+        case "::":
+        case "[::]":
+            return "::1"
+        default:
+            return normalized
+    }
 }
 
 const parsePort = (value: string | undefined, label: string): number | undefined => {
