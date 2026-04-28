@@ -93,6 +93,18 @@ That smoke starts an in-memory local broker, publishes a live-shaped session
 hello, turn start, assistant message step, and turn completion, then verifies
 the projected snapshot.
 
+For a browser-backed broker/web reliability check, run:
+
+```sh
+pnpm smoke:cockpit:web
+```
+
+That smoke starts an in-memory local broker and Vite web cockpit, points the web
+app at the broker with `VITE_COCKPIT_HTTP_URL`, verifies a live session in a
+real browser, enqueues a status command from the cockpit, stops the broker to
+confirm HTTP fallback, then restarts the broker and verifies live recovery. It
+requires the local `ui-browser` helper.
+
 For the full live Every Code loop:
 
 1. Start the cockpit server with `pnpm cockpit:server`.

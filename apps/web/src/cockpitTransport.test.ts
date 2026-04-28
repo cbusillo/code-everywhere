@@ -6,6 +6,7 @@ import {
     createSnapshotUrl,
     describeTransportStatus,
     fetchCockpitSnapshot,
+    normalizePollIntervalMs,
     normalizeTransportUrl,
 } from "./cockpitTransport"
 
@@ -19,6 +20,15 @@ describe("cockpit HTTP transport client", () => {
         expect(normalizeTransportUrl(undefined)).toBeNull()
         expect(normalizeTransportUrl("  ")).toBeNull()
         expect(normalizeTransportUrl(" http://127.0.0.1:4789 ")).toBe("http://127.0.0.1:4789")
+    })
+
+    it("normalizes optional poll interval configuration", () => {
+        expect(normalizePollIntervalMs(undefined)).toBeNull()
+        expect(normalizePollIntervalMs("  ")).toBeNull()
+        expect(normalizePollIntervalMs("500")).toBe(500)
+        expect(normalizePollIntervalMs("250.9")).toBe(250)
+        expect(normalizePollIntervalMs("0")).toBeNull()
+        expect(normalizePollIntervalMs("nope")).toBeNull()
     })
 
     it("fetches and validates cockpit snapshots", async () => {
