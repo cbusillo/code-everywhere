@@ -140,8 +140,9 @@ export const App = () => {
         setCommandLog(`Sending ${label} for ${command.sessionId} at epoch ${command.sessionEpoch}`)
         void postCockpitCommand(cockpitView.transport.url, command)
             .then((snapshot) => {
+                const pendingCount = snapshot.commands.filter((record) => record.deliveredAt === null).length
                 setCommandLog(
-                    `${label} sent for ${command.sessionId} at epoch ${command.sessionEpoch}; ${String(snapshot.commandCount)} queued`,
+                    `${label} sent for ${command.sessionId} at epoch ${command.sessionEpoch}; ${String(pendingCount)} pending, ${String(snapshot.commandCount)} retained`,
                 )
             })
             .catch((error: unknown) => {
