@@ -66,6 +66,7 @@ export type CockpitCommandStore = {
 export type CockpitCommandStoreOptions = {
     now?: () => Date
     createId?: (nextIndex: number) => string
+    initialRecords?: CockpitCommandRecord[]
 }
 
 export const createCockpitEventStore = (initialEvents: CockpitProjectionEvent[] = []): CockpitEventStore => {
@@ -117,7 +118,7 @@ export const createCockpitCommandStore = (
 ): CockpitCommandStore => {
     const now = options.now ?? (() => new Date())
     const createId = options.createId ?? ((nextIndex: number) => `command-${String(nextIndex)}`)
-    let commands: CockpitCommandRecord[] = []
+    let commands: CockpitCommandRecord[] = options.initialRecords?.map(cloneCommandRecord) ?? []
 
     const getSnapshot = (): CockpitCommandSnapshot => ({
         commandCount: commands.length,

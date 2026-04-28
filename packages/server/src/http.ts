@@ -297,7 +297,7 @@ const selectCommandPayload = (payload: unknown): unknown => {
     return payload
 }
 
-const isSessionCommand = (value: unknown): value is SessionCommand => {
+export const isSessionCommand = (value: unknown): value is SessionCommand => {
     if (!isRecord(value) || typeof value.kind !== "string") {
         return false
     }
@@ -332,7 +332,7 @@ const hasCommandScope = (value: Record<string, unknown>): boolean =>
 const isRequestedInputAnswer = (value: unknown): value is RequestedInputAnswer =>
     isRecord(value) && hasString(value, "questionId") && hasString(value, "value")
 
-const isCockpitProjectionEvent = (value: unknown): value is CockpitProjectionEvent => {
+export const isCockpitProjectionEvent = (value: unknown): value is CockpitProjectionEvent => {
     if (!isRecord(value) || typeof value.kind !== "string") {
         return false
     }
