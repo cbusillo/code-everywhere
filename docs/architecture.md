@@ -56,10 +56,10 @@ The first server checkpoint lives in `packages/server`. It is intentionally
 in-memory: callers ingest typed cockpit projection events and read projected
 snapshots.
 
-A lightweight local HTTP transport exposes snapshot, event-ingest, and reset
-endpoints for development and adapter spikes. It does not yet provide
-persistence, streaming, authentication, command dispatch, or notification
-delivery.
+A lightweight local HTTP transport exposes snapshot, event-ingest, reset, and
+command-inbox endpoints for development and adapter spikes. It does not yet
+provide persistence, streaming, authentication, runtime command delivery, or
+notification delivery.
 
 ### Clients
 

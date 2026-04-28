@@ -17,15 +17,15 @@ The goal is not to put a terminal in a browser. The goal is a structured cockpit
 This repository is a new product shell. It currently has shared contracts, an
 in-memory server ingestion/projection package with a lightweight local HTTP
 transport, and a web cockpit that can use either projected fake data or a local
-HTTP snapshot.
+HTTP snapshot and command inbox.
 
 Workspace packages:
 
 - `packages/contracts`: shared session, turn, approval, requested-input, command, and projection types/helpers.
-- `packages/server`: in-memory cockpit event ingestion, snapshot projection, and
-  local HTTP transport boundary.
+- `packages/server`: in-memory cockpit event ingestion, command inbox, snapshot
+  projection, and local HTTP transport boundary.
 - `apps/web`: React/Vite cockpit UI for projected fake data or local HTTP
-  snapshots.
+  snapshots and command dispatch.
 
 Useful entry points:
 
