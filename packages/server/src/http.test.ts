@@ -202,6 +202,70 @@ describe("cockpit HTTP transport", () => {
             body: null,
         })
     })
+
+    it("rejects non-contract enum values", async () => {
+        const invalidEvents = [
+            {
+                kind: "session_hello",
+                session: {
+                    ...baseSession,
+                    status: "almost-running",
+                },
+            },
+            {
+                kind: "turn_started",
+                sessionEpoch: "epoch-1",
+                turn: {
+                    id: "turn-1",
+                    sessionId: "session-1",
+                    title: "Invalid turn",
+                    status: "paused-ish",
+                    actor: "assistant",
+                    startedAt: "2026-04-27T16:01:00.000Z",
+                    completedAt: null,
+                    summary: "Should be rejected.",
+                    steps: [],
+                },
+            },
+            {
+                kind: "turn_step_added",
+                sessionId: "session-1",
+                sessionEpoch: "epoch-1",
+                turnId: "turn-1",
+                step: {
+                    id: "step-1",
+                    kind: "note",
+                    title: "Invalid step",
+                    detail: "Should be rejected.",
+                    timestamp: "2026-04-27T16:01:00.000Z",
+                    state: "completed",
+                },
+            },
+            {
+                kind: "approval_requested",
+                approval: {
+                    ...baseApproval,
+                    risk: "extreme",
+                },
+            },
+            {
+                kind: "approval_resolved",
+                sessionId: "session-1",
+                sessionEpoch: "epoch-1",
+                approvalId: "approval-1",
+                decision: "maybe",
+                resolvedAt: "2026-04-27T16:05:00.000Z",
+            },
+        ]
+
+        for (const event of invalidEvents) {
+            await expect(sendJson(baseUrl, "POST", "/events", { event })).resolves.toMatchObject({
+                statusCode: 400,
+                body: { error: "Expected one or more cockpit projection events" },
+            })
+        }
+        expect((await sendJson(baseUrl, "GET", "/snapshot")).body).toMatchObject({ eventCount: 0 })
+    })
 })
 
 type TestResponse = {

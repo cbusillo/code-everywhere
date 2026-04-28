@@ -8,6 +8,8 @@ import type {
     RequestedInputOption,
     RequestedInputQuestion,
     SessionTurn,
+    SessionStatus,
+    TurnStatus,
     TurnStep,
 } from "@code-everywhere/contracts"
 
@@ -23,6 +25,28 @@ export type CockpitHttpServerOptions = CockpitHttpHandlerOptions
 type JsonResponse = CockpitIngestionSnapshot | { error: string }
 
 const defaultMaxBodyBytes = 1024 * 1024
+const sessionStatusValues = [
+    "running",
+    "idle",
+    "blocked",
+    "waiting-for-input",
+    "waiting-for-approval",
+    "ended",
+    "error",
+] as const satisfies readonly SessionStatus[]
+const turnStatusValues = [
+    "running",
+    "completed",
+    "blocked",
+    "waiting-for-input",
+    "waiting-for-approval",
+    "error",
+] as const satisfies readonly TurnStatus[]
+const turnActorValues = ["operator", "assistant", "system"] as const satisfies readonly SessionTurn["actor"][]
+const turnStepKindValues = ["message", "tool", "status", "diff", "artifact", "error"] as const satisfies readonly TurnStep["kind"][]
+const turnStepStateValues = ["pending", "running", "completed", "blocked", "error"] as const satisfies readonly TurnStep["state"][]
+const approvalRiskValues = ["low", "medium", "high"] as const satisfies readonly PendingApproval["risk"][]
+const approvalDecisionValues = ["approve", "deny", "expired"] as const
 
 export const createCockpitHttpHandler = (options: CockpitHttpHandlerOptions = {}) => {
     const store = options.store ?? createCockpitEventStore()
@@ -187,7 +211,7 @@ const isCockpitProjectionEvent = (value: unknown): value is CockpitProjectionEve
             return (
                 hasString(value, "sessionId") &&
                 hasString(value, "sessionEpoch") &&
-                hasString(value, "status") &&
+                hasEnum(value, "status", sessionStatusValues) &&
                 hasString(value, "updatedAt")
             )
         case "turn_started":
@@ -204,7 +228,7 @@ const isCockpitProjectionEvent = (value: unknown): value is CockpitProjectionEve
                 hasString(value, "sessionId") &&
                 hasString(value, "sessionEpoch") &&
                 hasString(value, "turnId") &&
-                hasString(value, "status")
+                hasEnum(value, "status", turnStatusValues)
             )
         case "approval_requested":
             return isPendingApproval(value.approval)
@@ -213,7 +237,7 @@ const isCockpitProjectionEvent = (value: unknown): value is CockpitProjectionEve
                 hasString(value, "sessionId") &&
                 hasString(value, "sessionEpoch") &&
                 hasString(value, "approvalId") &&
-                hasString(value, "decision") &&
+                hasEnum(value, "decision", approvalDecisionValues) &&
                 hasString(value, "resolvedAt")
             )
         case "user_input_requested":
@@ -242,7 +266,7 @@ const isEveryCodeSession = (value: unknown): value is EveryCodeSession =>
     hasNullableString(value, "branch") &&
     hasNumber(value, "pid") &&
     hasString(value, "model") &&
-    hasString(value, "status") &&
+    hasEnum(value, "status", sessionStatusValues) &&
     hasString(value, "summary") &&
     hasString(value, "startedAt") &&
     hasString(value, "updatedAt") &&
@@ -253,8 +277,8 @@ const isSessionTurn = (value: unknown): value is SessionTurn =>
     hasString(value, "id") &&
     hasString(value, "sessionId") &&
     hasString(value, "title") &&
-    hasString(value, "status") &&
-    hasString(value, "actor") &&
+    hasEnum(value, "status", turnStatusValues) &&
+    hasEnum(value, "actor", turnActorValues) &&
     hasString(value, "startedAt") &&
     hasNullableString(value, "completedAt") &&
     hasString(value, "summary") &&
@@ -264,11 +288,11 @@ const isSessionTurn = (value: unknown): value is SessionTurn =>
 const isTurnStep = (value: unknown): value is TurnStep =>
     isRecord(value) &&
     hasString(value, "id") &&
-    hasString(value, "kind") &&
+    hasEnum(value, "kind", turnStepKindValues) &&
     hasString(value, "title") &&
     hasString(value, "detail") &&
     hasString(value, "timestamp") &&
-    hasString(value, "state")
+    hasEnum(value, "state", turnStepStateValues)
 
 const isPendingApproval = (value: unknown): value is PendingApproval =>
     isRecord(value) &&
@@ -280,7 +304,7 @@ const isPendingApproval = (value: unknown): value is PendingApproval =>
     hasString(value, "body") &&
     hasString(value, "command") &&
     hasString(value, "cwd") &&
-    hasString(value, "risk") &&
+    hasEnum(value, "risk", approvalRiskValues) &&
     hasString(value, "requestedAt")
 
 const isRequestedInput = (value: unknown): value is RequestedInput =>
@@ -310,6 +334,11 @@ const isRequestedInputOption = (value: unknown): value is RequestedInputOption =
     (value.description === undefined || typeof value.description === "string")
 
 const hasString = (value: Record<string, unknown>, key: string): boolean => typeof value[key] === "string"
+
+const hasEnum = (value: Record<string, unknown>, key: string, allowedValues: readonly string[]): boolean => {
+    const candidate = value[key]
+    return typeof candidate === "string" && allowedValues.includes(candidate)
+}
 
 const hasNullableString = (value: Record<string, unknown>, key: string): boolean =>
     typeof value[key] === "string" || value[key] === null
