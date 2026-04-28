@@ -58,6 +58,8 @@ Only after that should we wire the live bridge.
 The local HTTP transport now separates clients that produce commands from the
 Every Code adapter that consumes them:
 
+- start the local broker with `pnpm cockpit:server`; it listens on
+  `http://127.0.0.1:4789` by default
 - web and native clients enqueue operator actions with `POST /commands`
 - local adapters claim undelivered work with `POST /commands/claim`
 - `POST /commands/claim` accepts an optional `sessionId` filter and marks
@@ -67,6 +69,27 @@ Every Code adapter that consumes them:
 - adapter code should publish session events with the typed `postCockpitEvents`
   helper exported from the same module
 
-The next live bridge slice should run inside or beside Every Code, claim commands
-for its active `sessionId`, translate `SessionCommand` values into the runtime's
-remote-command handling, and emit projection events as command outcomes change.
+The Every Code HTTP remote-inbox adapter claims commands for its active
+`sessionId`, translates `SessionCommand` values into the runtime's existing
+remote-command handling, and emits projection events as session status and
+pending work change.
+
+## Local Smoke Loop
+
+1. Start the cockpit server with `pnpm cockpit:server`.
+2. Start the web cockpit with:
+
+    ```sh
+    VITE_COCKPIT_HTTP_URL=http://127.0.0.1:4789 pnpm --filter @code-everywhere/web dev
+    ```
+
+3. Configure Every Code with:
+
+    ```toml
+    [remote_inbox]
+    code_everywhere_url = "http://127.0.0.1:4789"
+    ```
+
+4. Launch `code` and confirm the session appears in the web cockpit.
+5. Exercise reply, status, approval, and requested-input commands from the web
+   cockpit and confirm they are claimed by the active Every Code session.

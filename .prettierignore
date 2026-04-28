@@ -1,1 +1,5 @@
 scratch/
+dist/
+**/dist/
+coverage/
+**/coverage/
