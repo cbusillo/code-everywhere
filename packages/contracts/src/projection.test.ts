@@ -187,6 +187,77 @@ describe("cockpit projection", () => {
         expect(state.sessions["session-1"]?.pendingApprovalIds).toEqual([])
         expect(state.sessions["session-1"]?.pendingInputIds).toEqual(["input-1"])
         expect(state.notifications.map((notification) => notification.kind)).toEqual(["approval", "input"])
+        expect(state.turns["turn-1"]?.steps).toEqual([
+            {
+                id: "approval:approval-1",
+                kind: "status",
+                title: "Approval granted",
+                detail: "pnpm install",
+                timestamp: "2026-04-27T16:04:30.000Z",
+                state: "completed",
+            },
+            {
+                id: "input:input-1",
+                kind: "status",
+                title: "Input requested",
+                detail: "Which surface should come first?",
+                timestamp: "2026-04-27T16:05:00.000Z",
+                state: "blocked",
+            },
+        ])
+    })
+
+    it("marks denied approvals and answered input in the turn timeline", () => {
+        const state = projectCockpitEvents([
+            {
+                kind: "session_hello",
+                session: baseSession,
+            },
+            {
+                kind: "turn_started",
+                sessionEpoch: "epoch-1",
+                turn: baseTurn,
+            },
+            {
+                kind: "approval_requested",
+                approval: {
+                    id: "approval-1",
+                    sessionId: "session-1",
+                    sessionEpoch: "epoch-1",
+                    turnId: "turn-1",
+                    title: "Approve install",
+                    body: "Install dependencies.",
+                    command: "pnpm install",
+                    cwd: "~/code/code-everywhere",
+                    risk: "medium",
+                    requestedAt: "2026-04-27T16:04:00.000Z",
+                },
+            },
+            {
+                kind: "approval_resolved",
+                sessionId: "session-1",
+                sessionEpoch: "epoch-1",
+                approvalId: "approval-1",
+                decision: "deny",
+                resolvedAt: "2026-04-27T16:04:30.000Z",
+            },
+            {
+                kind: "user_input_requested",
+                input: baseInput,
+            },
+            {
+                kind: "user_input_resolved",
+                sessionId: "session-1",
+                sessionEpoch: "epoch-1",
+                inputId: "input-1",
+                resolvedAt: "2026-04-27T16:05:30.000Z",
+            },
+        ])
+
+        expect(state.turns["turn-1"]?.steps.map((step) => [step.id, step.title, step.state])).toEqual([
+            ["approval:approval-1", "Approval denied", "error"],
+            ["input:input-1", "Input answered", "completed"],
+        ])
     })
 
     it("preserves waiting status while pending items remain", () => {
