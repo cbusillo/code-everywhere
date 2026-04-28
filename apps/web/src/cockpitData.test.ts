@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest"
 
-import { cockpitFixture, cockpitFixtureEvents, cockpitFixtureSnapshot, getAttentionSessions, statusLabels } from "./cockpitData"
+import {
+    cockpitFixture,
+    cockpitFixtureEvents,
+    cockpitFixtureSnapshot,
+    createCockpitFixtureFromSnapshot,
+    getAttentionSessions,
+    statusLabels,
+} from "./cockpitData"
 
 describe("cockpit fake data", () => {
     it("covers every required first-spike session state", () => {
@@ -30,6 +37,18 @@ describe("cockpit fake data", () => {
         expect(endedSession?.currentTurnId).toBeNull()
         expect(approvalSession?.turnIds).toEqual(["turn-alpha-1", "turn-alpha-2", "turn-alpha-3"])
         expect(approvalSession?.turns.map((turn) => turn.id)).toEqual(approvalSession?.turnIds)
+    })
+
+    it("converts transport snapshots without fake-only metadata", () => {
+        const fixture = createCockpitFixtureFromSnapshot(cockpitFixtureSnapshot, {
+            generatedAt: "2026-04-27T17:00:00.000Z",
+        })
+        const approvalSession = fixture.sessions.find((session) => session.sessionId === "ce-alpha")
+
+        expect(fixture.generatedAt).toBe("2026-04-27T17:00:00.000Z")
+        expect(approvalSession?.unreadCount).toBe(0)
+        expect(approvalSession?.currentTurnId).toBe("turn-alpha-3")
+        expect(approvalSession?.turns.map((turn) => turn.id)).toEqual(["turn-alpha-1", "turn-alpha-2", "turn-alpha-3"])
     })
 
     it("puts attention-needed sessions first in the operator queue", () => {

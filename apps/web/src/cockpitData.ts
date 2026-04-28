@@ -422,16 +422,24 @@ export const createCockpitFixtureEvents = (fixture: SourceCockpitFixture): Cockp
     })),
 ]
 
-const createCockpitFixtureFromSnapshot = (fixture: SourceCockpitFixture, snapshot: CockpitIngestionSnapshot): CockpitFixture => {
-    const unreadCounts = new Map(fixture.sessions.map((session) => [session.sessionId, session.unreadCount]))
-    const currentTurnIds = new Map(fixture.sessions.map((session) => [session.sessionId, session.currentTurnId]))
+export type CockpitFixtureOptions = {
+    generatedAt?: string
+    unreadCounts?: ReadonlyMap<SessionId, number>
+    currentTurnIds?: ReadonlyMap<SessionId, SessionTurn["id"] | null>
+}
+
+export const createCockpitFixtureFromSnapshot = (
+    snapshot: CockpitIngestionSnapshot,
+    options: CockpitFixtureOptions = {},
+): CockpitFixture => {
+    const generatedAt = options.generatedAt ?? getLatestSessionUpdate(snapshot.sessions) ?? "1970-01-01T00:00:00.000Z"
 
     return {
-        generatedAt: fixture.generatedAt,
+        generatedAt,
         sessions: snapshot.sessions.map((session) => ({
             ...session,
-            currentTurnId: getCurrentTurnId(currentTurnIds, session),
-            unreadCount: unreadCounts.get(session.sessionId) ?? 0,
+            currentTurnId: getCurrentTurnId(options.currentTurnIds, session),
+            unreadCount: options.unreadCounts?.get(session.sessionId) ?? 0,
             turns: session.turnIds
                 .map((turnId) => snapshot.state.turns[turnId])
                 .filter((turn): turn is SessionTurn => turn !== undefined),
@@ -440,6 +448,13 @@ const createCockpitFixtureFromSnapshot = (fixture: SourceCockpitFixture, snapsho
         requestedInputs: Object.values(snapshot.state.requestedInputs),
     }
 }
+
+const createCockpitFixtureFromSource = (fixture: SourceCockpitFixture, snapshot: CockpitIngestionSnapshot): CockpitFixture =>
+    createCockpitFixtureFromSnapshot(snapshot, {
+        generatedAt: fixture.generatedAt,
+        unreadCounts: new Map(fixture.sessions.map((session) => [session.sessionId, session.unreadCount])),
+        currentTurnIds: new Map(fixture.sessions.map((session) => [session.sessionId, session.currentTurnId])),
+    })
 
 const toEveryCodeSession = (session: SourceCockpitSession): EveryCodeSession => ({
     sessionId: session.sessionId,
@@ -456,18 +471,27 @@ const toEveryCodeSession = (session: SourceCockpitSession): EveryCodeSession => 
     currentTurnId: session.currentTurnId,
 })
 
-const getCurrentTurnId = (currentTurnIds: Map<SessionId, SessionTurn["id"] | null>, session: ProjectedCockpitSession) => {
-    if (currentTurnIds.has(session.sessionId)) {
+const getCurrentTurnId = (
+    currentTurnIds: ReadonlyMap<SessionId, SessionTurn["id"] | null> | undefined,
+    session: ProjectedCockpitSession,
+) => {
+    if (currentTurnIds?.has(session.sessionId) === true) {
         return currentTurnIds.get(session.sessionId) ?? null
     }
 
     return session.currentTurnId
 }
 
+const getLatestSessionUpdate = (sessions: ProjectedCockpitSession[]): string | undefined =>
+    sessions
+        .map((session) => session.updatedAt)
+        .sort((first, second) => second.localeCompare(first))
+        .at(0)
+
 export const cockpitFixtureEvents = createCockpitFixtureEvents(cockpitFixtureSource)
 export const cockpitFixtureStore = createCockpitEventStore(cockpitFixtureEvents)
 export const cockpitFixtureSnapshot = cockpitFixtureStore.getSnapshot()
-export const cockpitFixture: CockpitFixture = createCockpitFixtureFromSnapshot(cockpitFixtureSource, cockpitFixtureSnapshot)
+export const cockpitFixture: CockpitFixture = createCockpitFixtureFromSource(cockpitFixtureSource, cockpitFixtureSnapshot)
 
 export const statusLabels: Record<SessionStatus, string> = {
     running: "Running",

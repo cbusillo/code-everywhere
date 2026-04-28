@@ -67,6 +67,7 @@ describe("cockpit HTTP transport", () => {
         const response = await sendJson(baseUrl, "GET", "/snapshot")
 
         expect(response.statusCode).toBe(200)
+        expect(response.headers["access-control-allow-origin"]).toBe("*")
         const body = response.body as CockpitIngestionSnapshot
 
         expect(body).toMatchObject({
@@ -196,11 +197,16 @@ describe("cockpit HTTP transport", () => {
             statusCode: 405,
             body: { error: "Method not allowed" },
         })
+        await expect(sendJson(baseUrl, "OPTIONS", "/snapshot")).resolves.toMatchObject({
+            statusCode: 204,
+            body: null,
+        })
     })
 })
 
 type TestResponse = {
     statusCode: number
+    headers: Record<string, string | string[] | undefined>
     body: unknown
 }
 
@@ -228,7 +234,8 @@ const sendRaw = (baseUrl: string, method: string, path: string, body?: string): 
                 const text = Buffer.concat(chunks).toString("utf8")
                 resolve({
                     statusCode: response.statusCode ?? 0,
-                    body: JSON.parse(text) as unknown,
+                    headers: response.headers,
+                    body: text === "" ? null : (JSON.parse(text) as unknown),
                 })
             })
         })
