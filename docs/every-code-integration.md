@@ -64,6 +64,8 @@ Every Code adapter that consumes them:
   returned commands delivered before responding
 - adapter code should prefer the typed `claimCockpitCommands` helper exported
   from `@code-everywhere/server/http-client`
+- adapter code should publish session events with the typed `postCockpitEvents`
+  helper exported from the same module
 
 The next live bridge slice should run inside or beside Every Code, claim commands
 for its active `sessionId`, translate `SessionCommand` values into the runtime's
