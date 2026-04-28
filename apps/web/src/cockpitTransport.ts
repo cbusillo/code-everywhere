@@ -14,8 +14,9 @@ import type {
     TurnStatus,
     TurnStep,
 } from "@code-everywhere/contracts"
-import type { CockpitIngestionSnapshot } from "@code-everywhere/server"
+import type { CockpitCommandSnapshot, CockpitIngestionSnapshot } from "@code-everywhere/server"
 
+import { fetchCockpitCommands } from "./cockpitCommands"
 import { cockpitFixture, createCockpitFixtureFromSnapshot, type CockpitFixture } from "./cockpitData"
 
 export type CockpitTransportMode = "fixture" | "connecting" | "live" | "fallback"
@@ -41,6 +42,7 @@ type UseCockpitViewOptions = {
     transportUrl?: string
     pollIntervalMs?: number
     fetchSnapshot?: (transportUrl: string) => Promise<CockpitIngestionSnapshot>
+    fetchCommands?: (transportUrl: string) => Promise<CockpitCommandSnapshot>
     now?: () => Date
 }
 
@@ -56,6 +58,7 @@ export const useCockpitView = (options: UseCockpitViewOptions = {}): CockpitView
     const transportUrl = normalizeTransportUrl(options.transportUrl) ?? configuredTransportUrl
     const pollIntervalMs = options.pollIntervalMs ?? defaultPollIntervalMs
     const fetchSnapshot = options.fetchSnapshot ?? fetchCockpitSnapshot
+    const fetchCommands = options.fetchCommands ?? fetchCockpitCommands
     const now = options.now
 
     const initialState = useMemo<CockpitViewState>(
@@ -87,7 +90,10 @@ export const useCockpitView = (options: UseCockpitViewOptions = {}): CockpitView
 
         const loadSnapshot = async () => {
             try {
-                const snapshot = await fetchSnapshot(transportUrl)
+                const [snapshot, commands] = await Promise.all([
+                    fetchSnapshot(transportUrl),
+                    fetchCommands(transportUrl).catch(() => ({ commandCount: 0, commands: [] })),
+                ])
                 if (!isActive) {
                     return
                 }
@@ -95,7 +101,7 @@ export const useCockpitView = (options: UseCockpitViewOptions = {}): CockpitView
                 const loadedAt = getNow(now)
 
                 setState({
-                    fixture: createCockpitFixtureFromSnapshot(snapshot, { generatedAt: loadedAt }),
+                    fixture: createCockpitFixtureFromSnapshot(snapshot, { generatedAt: loadedAt, commands: commands.commands }),
                     transport: {
                         mode: "live",
                         url: transportUrl,
@@ -127,7 +133,7 @@ export const useCockpitView = (options: UseCockpitViewOptions = {}): CockpitView
             isActive = false
             scheduler.stop()
         }
-    }, [fetchSnapshot, now, pollIntervalMs, transportUrl])
+    }, [fetchCommands, fetchSnapshot, now, pollIntervalMs, transportUrl])
 
     return state
 }
@@ -176,11 +182,12 @@ export const fetchCockpitSnapshot = async (
     }
 
     const body = (await response.json()) as unknown
-    if (!isCockpitIngestionSnapshot(body)) {
+    const snapshot = normalizeCockpitIngestionSnapshot(body)
+    if (snapshot === null) {
         throw new Error("Cockpit snapshot response did not match the expected shape")
     }
 
-    return body
+    return snapshot
 }
 
 export const createSnapshotUrl = (transportUrl: string): string => `${transportUrl.replace(/\/+$/, "")}/snapshot`
@@ -203,22 +210,51 @@ export const describeTransportStatus = (status: CockpitTransportStatus): string 
     }
 }
 
-const isCockpitIngestionSnapshot = (value: unknown): value is CockpitIngestionSnapshot =>
-    isRecord(value) &&
-    typeof value.eventCount === "number" &&
-    isCockpitProjectionState(value.state) &&
-    isArrayOf(value.sessions, isProjectedCockpitSession) &&
-    isArrayOf(value.attentionSessionIds, isString)
+const normalizeCockpitIngestionSnapshot = (value: unknown): CockpitIngestionSnapshot | null => {
+    if (!isRecord(value) || typeof value.eventCount !== "number") {
+        return null
+    }
 
-const isCockpitProjectionState = (value: unknown): value is CockpitProjectionState =>
-    isRecord(value) &&
-    isRecordOf(value.sessions, isProjectedCockpitSession) &&
-    isRecordOf(value.turns, isSessionTurn) &&
-    isRecordOf(value.pendingApprovals, isPendingApproval) &&
-    isRecordOf(value.requestedInputs, isRequestedInput) &&
-    isRecordOf(value.commandOutcomes, isCommandOutcome) &&
-    isArrayOf(value.notifications, isCockpitNotification) &&
-    isArrayOf(value.staleEvents, isStaleCockpitEvent)
+    const state = normalizeCockpitProjectionState(value.state)
+    if (state === null || !isArrayOf(value.sessions, isProjectedCockpitSession) || !isArrayOf(value.attentionSessionIds, isString)) {
+        return null
+    }
+
+    return {
+        eventCount: value.eventCount,
+        state,
+        sessions: value.sessions,
+        attentionSessionIds: value.attentionSessionIds,
+    }
+}
+
+const normalizeCockpitProjectionState = (value: unknown): CockpitProjectionState | null => {
+    if (
+        !isRecord(value) ||
+        !isRecordOf(value.sessions, isProjectedCockpitSession) ||
+        !isRecordOf(value.turns, isSessionTurn) ||
+        !isRecordOf(value.pendingApprovals, isPendingApproval) ||
+        !isRecordOf(value.requestedInputs, isRequestedInput) ||
+        !isArrayOf(value.notifications, isCockpitNotification) ||
+        !isArrayOf(value.staleEvents, isStaleCockpitEvent)
+    ) {
+        return null
+    }
+
+    if (value.commandOutcomes !== undefined && !isRecordOf(value.commandOutcomes, isCommandOutcome)) {
+        return null
+    }
+
+    return {
+        sessions: value.sessions,
+        turns: value.turns,
+        pendingApprovals: value.pendingApprovals,
+        requestedInputs: value.requestedInputs,
+        commandOutcomes: value.commandOutcomes ?? {},
+        notifications: value.notifications,
+        staleEvents: value.staleEvents,
+    }
+}
 
 const isProjectedCockpitSession = (value: unknown): value is ProjectedCockpitSession =>
     isRecord(value) &&

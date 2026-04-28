@@ -42,10 +42,23 @@ describe("cockpit fake data", () => {
     it("converts transport snapshots without fake-only metadata", () => {
         const fixture = createCockpitFixtureFromSnapshot(cockpitFixtureSnapshot, {
             generatedAt: "2026-04-27T17:00:00.000Z",
+            commands: [
+                {
+                    id: "command-1",
+                    receivedAt: "2026-04-27T17:00:00.000Z",
+                    deliveredAt: null,
+                    command: {
+                        kind: "status_request",
+                        sessionId: "ce-alpha",
+                        sessionEpoch: "epoch-34",
+                    },
+                },
+            ],
         })
         const approvalSession = fixture.sessions.find((session) => session.sessionId === "ce-alpha")
 
         expect(fixture.generatedAt).toBe("2026-04-27T17:00:00.000Z")
+        expect(fixture.commands.map((command) => command.id)).toEqual(["command-1"])
         expect(approvalSession?.unreadCount).toBe(0)
         expect(approvalSession?.currentTurnId).toBe("turn-alpha-3")
         expect(approvalSession?.turns.map((turn) => turn.id)).toEqual(["turn-alpha-1", "turn-alpha-2", "turn-alpha-3"])

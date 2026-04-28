@@ -9,7 +9,7 @@ import type {
     SessionStatus,
     SessionTurn,
 } from "@code-everywhere/contracts"
-import type { CockpitIngestionSnapshot } from "@code-everywhere/server"
+import type { CockpitCommandRecord, CockpitIngestionSnapshot } from "@code-everywhere/server"
 import { createCockpitEventStore } from "@code-everywhere/server"
 
 type SourceCockpitSession = EveryCodeSession & {
@@ -23,6 +23,7 @@ type SourceCockpitFixture = {
     approvals: PendingApproval[]
     requestedInputs: RequestedInput[]
     commandOutcomes: CommandOutcome[]
+    commands: CockpitCommandRecord[]
 }
 
 export type CockpitSession = ProjectedCockpitSession & {
@@ -36,6 +37,7 @@ export type CockpitFixture = {
     approvals: PendingApproval[]
     requestedInputs: RequestedInput[]
     commandOutcomes: CommandOutcome[]
+    commands: CockpitCommandRecord[]
 }
 
 const sessionBase = {
@@ -394,6 +396,7 @@ const cockpitFixtureSource: SourceCockpitFixture = {
         },
     ],
     commandOutcomes: [],
+    commands: [],
 }
 
 export const createCockpitFixtureEvents = (fixture: SourceCockpitFixture): CockpitProjectionEvent[] => [
@@ -430,6 +433,7 @@ export type CockpitFixtureOptions = {
     generatedAt?: string
     unreadCounts?: ReadonlyMap<SessionId, number>
     currentTurnIds?: ReadonlyMap<SessionId, SessionTurn["id"] | null>
+    commands?: CockpitCommandRecord[]
 }
 
 export const createCockpitFixtureFromSnapshot = (
@@ -453,6 +457,7 @@ export const createCockpitFixtureFromSnapshot = (
         commandOutcomes: Object.values(snapshot.state.commandOutcomes).sort((left, right) =>
             right.handledAt.localeCompare(left.handledAt),
         ),
+        commands: [...(options.commands ?? [])].sort((left, right) => right.receivedAt.localeCompare(left.receivedAt)),
     }
 }
 
