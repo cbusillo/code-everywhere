@@ -87,6 +87,24 @@ const stepTone: Record<TurnStep["state"], string> = {
     error: "is-error",
 }
 
+const stepKindIcon: Record<TurnStep["kind"], IconComponent> = {
+    message: MessageSquareText,
+    tool: TerminalSquare,
+    status: Info,
+    diff: GitBranch,
+    artifact: MonitorDot,
+    error: OctagonAlert,
+}
+
+const stepKindLabel: Record<TurnStep["kind"], string> = {
+    message: "Message",
+    tool: "Tool",
+    status: "Status",
+    diff: "Diff",
+    artifact: "Artifact",
+    error: "Error",
+}
+
 const turnRailTone: Record<TurnStatus, string> = {
     running: "is-running",
     completed: "is-completed",
@@ -258,7 +276,7 @@ const EmptySessionDetail = ({ transport }: { transport: CockpitTransportStatus }
         <div className="empty-cockpit-card">
             <p className="eyebrow">{describeTransportStatus(transport)}</p>
             <h2>No active sessions</h2>
-            <p>The current snapshot is connected and healthy, but it does not contain any trusted Every Code sessions yet.</p>
+            <p>{emptySessionDetailCopy(transport)}</p>
         </div>
     </section>
 )
@@ -618,16 +636,30 @@ const TurnCard = ({ turn }: { turn: SessionTurn }) => (
         </div>
         <p>{turn.summary}</p>
         <div className="step-list">
-            {turn.steps.map((step) => (
-                <div className="step-row" key={step.id}>
-                    <span className={`step-dot ${stepTone[step.state]}`} aria-hidden="true" />
-                    <div>
-                        <strong>{step.title}</strong>
-                        <p>{step.detail}</p>
-                    </div>
-                    <span>{formatTime(step.timestamp)}</span>
+            {turn.steps.length === 0 ? (
+                <div className="step-empty">
+                    <Info size={14} />
+                    <p>No timeline steps have arrived for this turn yet.</p>
                 </div>
-            ))}
+            ) : null}
+            {turn.steps.map((step) => {
+                const StepIcon = stepKindIcon[step.kind]
+
+                return (
+                    <div className={`step-row is-${step.kind}`} key={step.id}>
+                        <span className={`step-dot ${stepTone[step.state]}`} aria-hidden="true" />
+                        <div className="step-body">
+                            <div className="step-title-row">
+                                <StepIcon size={13} aria-hidden="true" />
+                                <span>{stepKindLabel[step.kind]}</span>
+                                <strong>{step.title}</strong>
+                            </div>
+                            <p>{step.detail}</p>
+                        </div>
+                        <span>{formatTime(step.timestamp)}</span>
+                    </div>
+                )
+            })}
         </div>
     </article>
 )
@@ -665,6 +697,21 @@ const MetadataItem = ({ icon: Icon, label, value }: { icon: IconComponent; label
         <strong>{value}</strong>
     </div>
 )
+
+const emptySessionDetailCopy = (transport: CockpitTransportStatus): string => {
+    switch (transport.mode) {
+        case "fixture":
+            return "The cockpit is showing fake data because no local broker URL is configured."
+        case "connecting":
+            return "The cockpit is connecting to the local broker and has not received trusted Every Code sessions yet."
+        case "live":
+            return "The local broker is connected and healthy, but it does not contain trusted Every Code sessions yet."
+        case "fallback":
+            return transport.error === null
+                ? "The cockpit is showing the last known snapshot because the local broker is unavailable."
+                : `The cockpit is showing the last known snapshot because the local broker is unavailable: ${transport.error}`
+    }
+}
 
 const ActionButton = ({ icon: Icon, label, onClick }: { icon: IconComponent; label: string; onClick: () => void }) => (
     <button className="quiet-button" type="button" onClick={onClick} title={label}>

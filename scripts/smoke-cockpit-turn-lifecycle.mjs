@@ -21,15 +21,23 @@ const run = async () => {
         await postJson(`${url}/events`, { events: createTurnLifecycleEvents() })
         const snapshot = await getJson(`${url}/snapshot`)
 
-        assertEqual(snapshot.eventCount, 5, "event count")
+        assertEqual(snapshot.eventCount, 13, "event count")
         assertEqual(snapshot.sessions[0]?.sessionId, "smoke-session", "session id")
         assertEqual(snapshot.sessions[0]?.status, "idle", "session status")
         assertEqual(snapshot.sessions[0]?.currentTurnId, "smoke-turn", "current turn id")
         assertEqual(snapshot.state.turns["smoke-turn"]?.status, "completed", "turn status")
-        assertEqual(snapshot.state.turns["smoke-turn"]?.steps.length, 2, "turn step count")
+        assertEqual(snapshot.state.turns["smoke-turn"]?.steps.length, 8, "turn step count")
         assertEqual(snapshot.state.turns["smoke-turn"]?.steps[0]?.title, "Shell command", "tool step title")
         assertEqual(snapshot.state.turns["smoke-turn"]?.steps[0]?.state, "completed", "tool step state")
-        assertEqual(snapshot.state.turns["smoke-turn"]?.steps[1]?.detail, "Smoke turn complete.", "assistant message")
+        assertEqual(snapshot.state.turns["smoke-turn"]?.steps[1]?.title, "Browser tool", "browser step title")
+        assertEqual(snapshot.state.turns["smoke-turn"]?.steps[2]?.title, "MCP tool", "mcp step title")
+        assertEqual(snapshot.state.turns["smoke-turn"]?.steps[3]?.kind, "diff", "diff step kind")
+        assertEqual(snapshot.state.turns["smoke-turn"]?.steps[4]?.kind, "artifact", "artifact step kind")
+        assertEqual(snapshot.state.turns["smoke-turn"]?.steps[5]?.title, "Approval granted", "approval step title")
+        assertEqual(snapshot.state.turns["smoke-turn"]?.steps[6]?.title, "Input answered", "input step title")
+        assertEqual(snapshot.state.turns["smoke-turn"]?.steps[7]?.detail, "Smoke turn complete.", "assistant message")
+        assertEqual(snapshot.state.pendingApprovals["approval-smoke"], undefined, "resolved approval")
+        assertEqual(snapshot.state.requestedInputs["input-smoke"], undefined, "resolved input")
 
         stdout.write(`Cockpit turn lifecycle smoke passed at ${url}\n`)
     } catch (error) {
@@ -182,6 +190,117 @@ const createTurnLifecycleEvents = () => [
             timestamp: "2026-04-28T12:00:02.000Z",
             state: "completed",
         },
+    },
+    {
+        kind: "turn_step_added",
+        sessionId: "smoke-session",
+        sessionEpoch: "smoke-epoch",
+        turnId: "smoke-turn",
+        step: {
+            id: "smoke-turn:tool:browser-1",
+            kind: "tool",
+            title: "Browser tool",
+            detail: 'browser_open\n{"url":"http://127.0.0.1:4789/sessions/smoke-session?view=timeline-with-a-very-long-token-that-must-wrap"}',
+            timestamp: "2026-04-28T12:00:02.100Z",
+            state: "completed",
+        },
+    },
+    {
+        kind: "turn_step_added",
+        sessionId: "smoke-session",
+        sessionEpoch: "smoke-epoch",
+        turnId: "smoke-turn",
+        step: {
+            id: "smoke-turn:tool:mcp-1",
+            kind: "tool",
+            title: "MCP tool",
+            detail: 'filesystem.read_file\n{"path":"/tmp/code-everywhere-smoke/packages/contracts/src/index.ts"}',
+            timestamp: "2026-04-28T12:00:02.200Z",
+            state: "completed",
+        },
+    },
+    {
+        kind: "turn_step_added",
+        sessionId: "smoke-session",
+        sessionEpoch: "smoke-epoch",
+        turnId: "smoke-turn",
+        step: {
+            id: "smoke-turn:diff",
+            kind: "diff",
+            title: "Turn diff",
+            detail: "diff --git a/apps/web/src/App.tsx b/apps/web/src/App.tsx\n+preserve multiline tool details in timeline rows",
+            timestamp: "2026-04-28T12:00:02.300Z",
+            state: "completed",
+        },
+    },
+    {
+        kind: "turn_step_added",
+        sessionId: "smoke-session",
+        sessionEpoch: "smoke-epoch",
+        turnId: "smoke-turn",
+        step: {
+            id: "smoke-turn:artifact:image-1",
+            kind: "artifact",
+            title: "Image artifact",
+            detail: "Generated image saved at /tmp/code-everywhere-smoke/artifacts/timeline-smoke.png",
+            timestamp: "2026-04-28T12:00:02.400Z",
+            state: "completed",
+        },
+    },
+    {
+        kind: "approval_requested",
+        approval: {
+            id: "approval-smoke",
+            sessionId: "smoke-session",
+            sessionEpoch: "smoke-epoch",
+            turnId: "smoke-turn",
+            title: "Approve smoke command",
+            body: "Run a harmless smoke command.",
+            command: "pnpm smoke:cockpit:turns",
+            cwd: "/tmp/code-everywhere-smoke",
+            risk: "low",
+            requestedAt: "2026-04-28T12:00:02.500Z",
+        },
+    },
+    {
+        kind: "approval_resolved",
+        sessionId: "smoke-session",
+        sessionEpoch: "smoke-epoch",
+        approvalId: "approval-smoke",
+        decision: "approve",
+        resolvedAt: "2026-04-28T12:00:02.600Z",
+    },
+    {
+        kind: "user_input_requested",
+        input: {
+            id: "input-smoke",
+            sessionId: "smoke-session",
+            sessionEpoch: "smoke-epoch",
+            turnId: "smoke-turn",
+            title: "Choose smoke mode",
+            requestedAt: "2026-04-28T12:00:02.700Z",
+            questions: [
+                {
+                    id: "mode",
+                    label: "Mode",
+                    prompt: "Which timeline surface should be emphasized?",
+                    required: true,
+                    options: [
+                        {
+                            label: "Timeline",
+                            value: "timeline",
+                        },
+                    ],
+                },
+            ],
+        },
+    },
+    {
+        kind: "user_input_resolved",
+        sessionId: "smoke-session",
+        sessionEpoch: "smoke-epoch",
+        inputId: "input-smoke",
+        resolvedAt: "2026-04-28T12:00:02.800Z",
     },
     {
         kind: "turn_step_added",
