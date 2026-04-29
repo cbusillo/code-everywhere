@@ -640,6 +640,31 @@ export const getCommandHistoryEntries = (
     outcomes: CommandOutcome[],
     session: CockpitSession | undefined,
 ): CommandHistoryEntry[] => {
+    return getRetainedCommandHistoryEntries(commands, outcomes, session).slice(0, 5)
+}
+
+export const getCommandOutcomeSummary = (
+    commands: CockpitCommandRecord[],
+    outcomes: CommandOutcome[],
+    session: CockpitSession | undefined,
+): CommandOutcomeSummary => {
+    const entries = getRetainedCommandHistoryEntries(commands, outcomes, session)
+    const rejected = entries.filter((entry) => entry.state === "rejected").length
+    const stale = entries.filter((entry) => entry.isStale).length
+
+    return {
+        total: entries.length,
+        rejected,
+        stale,
+        latest: entries[0],
+    }
+}
+
+const getRetainedCommandHistoryEntries = (
+    commands: CockpitCommandRecord[],
+    outcomes: CommandOutcome[],
+    session: CockpitSession | undefined,
+): CommandHistoryEntry[] => {
     if (session === undefined) {
         return []
     }
@@ -692,19 +717,7 @@ export const getCommandHistoryEntries = (
             }),
         )
 
-    return [...entries, ...outcomeOnlyEntries].sort((left, right) => right.timestamp.localeCompare(left.timestamp)).slice(0, 5)
-}
-
-export const getCommandOutcomeSummary = (entries: CommandHistoryEntry[]): CommandOutcomeSummary => {
-    const rejected = entries.filter((entry) => entry.state === "rejected").length
-    const stale = entries.filter((entry) => entry.isStale).length
-
-    return {
-        total: entries.length,
-        rejected,
-        stale,
-        latest: entries.at(0),
-    }
+    return [...entries, ...outcomeOnlyEntries].sort((left, right) => right.timestamp.localeCompare(left.timestamp))
 }
 
 const isVisibleOutcomeForSession = (outcome: CommandOutcome, session: CockpitSession): boolean =>

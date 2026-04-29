@@ -1,3 +1,4 @@
+import type { CommandOutcome } from "@code-everywhere/contracts"
 import { describe, expect, it } from "vitest"
 
 import {
@@ -177,7 +178,7 @@ describe("cockpit fake data", () => {
         }
 
         const history = getCommandHistoryEntries(cockpitFixture.commands, cockpitFixture.commandOutcomes, session)
-        const summary = getCommandOutcomeSummary(history)
+        const summary = getCommandOutcomeSummary(cockpitFixture.commands, cockpitFixture.commandOutcomes, session)
 
         expect(history).toHaveLength(1)
         expect(history[0]).toMatchObject({
@@ -188,6 +189,49 @@ describe("cockpit fake data", () => {
         })
         expect(summary).toMatchObject({
             total: 1,
+            rejected: 1,
+            stale: 1,
+        })
+    })
+
+    it("summarizes all retained command outcomes, not just the five visible rows", () => {
+        const session = cockpitFixture.sessions.find((candidate) => candidate.sessionId === "ce-delta")
+        expect(session).toBeDefined()
+        if (session === undefined) {
+            throw new Error("Expected ce-delta fixture session")
+        }
+
+        const outcomes: CommandOutcome[] = [
+            ...Array.from(
+                { length: 5 },
+                (_, index): CommandOutcome => ({
+                    commandId: `command-visible-${String(index + 1)}`,
+                    sessionId: session.sessionId,
+                    sessionEpoch: session.sessionEpoch,
+                    commandKind: "status_request",
+                    status: "accepted",
+                    reason: null,
+                    handledAt: `2026-04-27T15:5${String(index)}:00.000Z`,
+                }),
+            ),
+            {
+                commandId: "command-hidden-stale",
+                sessionId: session.sessionId,
+                sessionEpoch: session.sessionEpoch,
+                commandKind: "continue_autonomously",
+                status: "rejected",
+                reason: "stale command retained for review",
+                handledAt: "2026-04-27T15:40:00.000Z",
+            },
+        ]
+
+        const history = getCommandHistoryEntries([], outcomes, session)
+        const summary = getCommandOutcomeSummary([], outcomes, session)
+
+        expect(history).toHaveLength(5)
+        expect(history.some((entry) => entry.id === "command-hidden-stale")).toBe(false)
+        expect(summary).toMatchObject({
+            total: 6,
             rejected: 1,
             stale: 1,
         })
