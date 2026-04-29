@@ -55,6 +55,23 @@ export type SessionDetailSummary = {
     blockedCount: number
 }
 
+export type CommandHistoryEntry = {
+    id: string
+    label: string
+    state: "queued" | "delivered" | "accepted" | "rejected"
+    timestamp: string
+    detail: string
+    isStale: boolean
+    isCurrentEpoch: boolean
+}
+
+export type CommandOutcomeSummary = {
+    total: number
+    rejected: number
+    stale: number
+    latest: CommandHistoryEntry | undefined
+}
+
 export type OperatorAttentionKind = "approval" | "input" | "error" | "blocked" | "stale-command" | "rejected-command"
 
 export type OperatorAttentionItem = {
@@ -429,7 +446,17 @@ const cockpitFixtureSource: SourceCockpitFixture = {
             ],
         },
     ],
-    commandOutcomes: [],
+    commandOutcomes: [
+        {
+            commandId: "command-delta-rejected",
+            sessionId: "ce-delta",
+            sessionEpoch: "epoch-3",
+            commandKind: "continue_autonomously",
+            status: "rejected",
+            reason: "no active turn is ready to continue after stale epoch rejection",
+            handledAt: "2026-04-27T15:47:30.000Z",
+        },
+    ],
     commands: [],
     staleEvents: [],
 }
@@ -453,6 +480,10 @@ export const createCockpitFixtureEvents = (fixture: SourceCockpitFixture): Cockp
     ...fixture.requestedInputs.map<CockpitProjectionEvent>((input) => ({
         kind: "user_input_requested",
         input,
+    })),
+    ...fixture.commandOutcomes.map<CockpitProjectionEvent>((outcome) => ({
+        kind: "command_outcome",
+        outcome,
     })),
     ...fixture.sessions.map<CockpitProjectionEvent>((session) => ({
         kind: "session_status_changed",
@@ -603,6 +634,90 @@ export const getSessionDetailSummary = (session: CockpitSession): SessionDetailS
         blockedCount,
     }
 }
+
+export const getCommandHistoryEntries = (
+    commands: CockpitCommandRecord[],
+    outcomes: CommandOutcome[],
+    session: CockpitSession | undefined,
+): CommandHistoryEntry[] => {
+    if (session === undefined) {
+        return []
+    }
+
+    const outcomesByCommandId = new Map(outcomes.map((outcome) => [outcome.commandId, outcome]))
+    const visibleCommandIds = new Set<string>()
+    const entries = commands
+        .filter((record) => {
+            const outcome = outcomesByCommandId.get(record.id)
+            return (
+                (record.command.sessionId === session.sessionId && record.command.sessionEpoch === session.sessionEpoch) ||
+                (outcome?.sessionId === session.sessionId && isVisibleOutcomeForSession(outcome, session))
+            )
+        })
+        .map((record): CommandHistoryEntry => {
+            const outcome = outcomesByCommandId.get(record.id)
+            const state = outcome?.status ?? (record.deliveredAt === null ? "queued" : "delivered")
+            const timestamp = outcome?.handledAt ?? record.deliveredAt ?? record.receivedAt
+            const detail = outcome?.reason ?? (record.deliveredAt === null ? "Waiting for Every Code" : "Claimed by Every Code")
+            visibleCommandIds.add(record.id)
+
+            return {
+                id: record.id,
+                label: formatCommandKind(record.command.kind),
+                state,
+                timestamp,
+                detail,
+                isStale: isStaleCommandOutcome(outcome),
+                isCurrentEpoch:
+                    outcome?.sessionEpoch === session.sessionEpoch || record.command.sessionEpoch === session.sessionEpoch,
+            }
+        })
+
+    const outcomeOnlyEntries = outcomes
+        .filter(
+            (outcome) =>
+                outcome.sessionId === session.sessionId &&
+                isVisibleOutcomeForSession(outcome, session) &&
+                !visibleCommandIds.has(outcome.commandId),
+        )
+        .map(
+            (outcome): CommandHistoryEntry => ({
+                id: outcome.commandId,
+                label: formatCommandKind(outcome.commandKind),
+                state: outcome.status,
+                timestamp: outcome.handledAt,
+                detail: outcome.reason ?? "Outcome reported by Every Code",
+                isStale: isStaleCommandOutcome(outcome),
+                isCurrentEpoch: outcome.sessionEpoch === session.sessionEpoch,
+            }),
+        )
+
+    return [...entries, ...outcomeOnlyEntries].sort((left, right) => right.timestamp.localeCompare(left.timestamp)).slice(0, 5)
+}
+
+export const getCommandOutcomeSummary = (entries: CommandHistoryEntry[]): CommandOutcomeSummary => {
+    const rejected = entries.filter((entry) => entry.state === "rejected").length
+    const stale = entries.filter((entry) => entry.isStale).length
+
+    return {
+        total: entries.length,
+        rejected,
+        stale,
+        latest: entries.at(0),
+    }
+}
+
+const isVisibleOutcomeForSession = (outcome: CommandOutcome, session: CockpitSession): boolean =>
+    outcome.sessionEpoch === session.sessionEpoch || outcome.status === "rejected" || isStaleCommandOutcome(outcome)
+
+const isStaleCommandOutcome = (outcome: CommandOutcome | undefined): boolean =>
+    outcome?.reason?.toLowerCase().includes("stale") ?? false
+
+const formatCommandKind = (kind: SessionCommand["kind"]): string =>
+    kind
+        .split("_")
+        .map((part) => `${part[0]?.toUpperCase() ?? ""}${part.slice(1)}`)
+        .join(" ")
 
 const emptyTurnStepSummary = (): TurnStepSummary => ({
     message: 0,
