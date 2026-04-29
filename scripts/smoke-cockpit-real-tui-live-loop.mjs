@@ -16,6 +16,15 @@ const pendingWorkSmokeEnabled = () =>
             .trim()
             .toLowerCase(),
     )
+const pendingWorkApprovalDecision = () => {
+    const decision = String(process.env.CODE_EVERYWHERE_SMOKE_APPROVAL_DECISION ?? "approve")
+        .trim()
+        .toLowerCase()
+    if (decision !== "approve" && decision !== "deny") {
+        throw new Error(`CODE_EVERYWHERE_SMOKE_APPROVAL_DECISION must be approve or deny, got ${JSON.stringify(decision)}`)
+    }
+    return decision
+}
 
 const run = async () => {
     const uiBrowser = await findCommand("ui-browser", "ui-browser is required for pnpm smoke:cockpit:real-tui")
@@ -385,8 +394,9 @@ const clickFirstCommandButton = async (uiBrowser, session, label) => {
 }
 
 const runPendingWorkSmoke = async (uiBrowser, session, brokerUrl, tuiSession) => {
+    const approvalDecision = pendingWorkApprovalDecision()
     await waitForElementCount(uiBrowser, session, ".approval-card", 1)
-    await clickButtonByText(uiBrowser, session, "Approve")
+    await clickButtonByText(uiBrowser, session, approvalDecision === "approve" ? "Approve" : "Deny")
     const approvalOutcome = await waitForCommandOutcome(brokerUrl, "approval_decision", tuiSession)
     assertEqual(approvalOutcome.status, "accepted", "approval decision outcome")
     assertEqual(approvalOutcome.sessionId, tuiSession.sessionId, "approval decision session")
@@ -396,6 +406,13 @@ const runPendingWorkSmoke = async (uiBrowser, session, brokerUrl, tuiSession) =>
         state: "accepted",
         detail: "Claimed by Every Code",
     })
+    if (approvalDecision === "deny") {
+        await waitForPendingWorkState(brokerUrl, tuiSession, { approvalCount: 0, inputCount: 0 })
+        await waitForElementCount(uiBrowser, session, ".approval-card", 0)
+        await waitForElementCount(uiBrowser, session, ".input-card", 0)
+        return
+    }
+
     await waitForPendingWorkState(brokerUrl, tuiSession, { approvalCount: 0, inputCount: 1 })
     await waitForElementCount(uiBrowser, session, ".approval-card", 0)
     await waitForElementCount(uiBrowser, session, ".input-card", 1)
