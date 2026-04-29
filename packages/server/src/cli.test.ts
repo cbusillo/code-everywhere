@@ -52,6 +52,9 @@ describe("cockpit HTTP server CLI", () => {
         expect(parseCockpitServerArgs([], { CODE_EVERYWHERE_AUTH_TOKEN: "env-secret" })).toMatchObject({
             authToken: "env-secret",
         })
+        expect(parseCockpitServerArgs(["--auth-token", "-leading-hyphen-secret"], {})).toMatchObject({
+            authToken: "-leading-hyphen-secret",
+        })
         expect(parseCockpitServerArgs(["--memory"], {})).toMatchObject({ dataFile: null })
         expect(parseCockpitServerArgs(["--", "--help"], {})).toMatchObject({ help: true })
         expect(parseCockpitServerArgs(["--help"], { CODE_EVERYWHERE_PORT: "nope" })).toMatchObject({ help: true })

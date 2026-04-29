@@ -692,7 +692,7 @@ const getRetainedCommandHistoryEntries = (
                 state,
                 timestamp,
                 detail,
-                isStale: isStaleCommandOutcome(outcome),
+                isStale: isStaleCommandOutcome(outcome, session),
                 isCurrentEpoch:
                     outcome?.sessionEpoch === session.sessionEpoch || record.command.sessionEpoch === session.sessionEpoch,
             }
@@ -712,7 +712,7 @@ const getRetainedCommandHistoryEntries = (
                 state: outcome.status,
                 timestamp: outcome.handledAt,
                 detail: outcome.reason ?? "Outcome reported by Every Code",
-                isStale: isStaleCommandOutcome(outcome),
+                isStale: isStaleCommandOutcome(outcome, session),
                 isCurrentEpoch: outcome.sessionEpoch === session.sessionEpoch,
             }),
         )
@@ -721,10 +721,18 @@ const getRetainedCommandHistoryEntries = (
 }
 
 const isVisibleOutcomeForSession = (outcome: CommandOutcome, session: CockpitSession): boolean =>
-    outcome.sessionEpoch === session.sessionEpoch || outcome.status === "rejected" || isStaleCommandOutcome(outcome)
+    outcome.sessionEpoch === session.sessionEpoch || outcome.status === "rejected" || isStaleCommandOutcome(outcome, session)
 
-const isStaleCommandOutcome = (outcome: CommandOutcome | undefined): boolean =>
-    outcome?.reason?.toLowerCase().includes("stale") ?? false
+const isStaleCommandOutcome = (outcome: CommandOutcome | undefined, session: Pick<CockpitSession, "sessionEpoch">): boolean =>
+    outcome?.status === "rejected" && outcome.sessionEpoch !== session.sessionEpoch
+
+const isStaleCommandOutcomeForSessions = (
+    outcome: CommandOutcome,
+    sessions: readonly Pick<CockpitSession, "sessionEpoch" | "sessionId">[],
+): boolean => {
+    const activeSession = sessions.find((session) => session.sessionId === outcome.sessionId)
+    return activeSession !== undefined && isStaleCommandOutcome(outcome, activeSession)
+}
 
 const formatCommandKind = (kind: SessionCommand["kind"]): string =>
     kind
@@ -785,7 +793,7 @@ export const getOperatorAttentionSummary = (
         ...fixture.commandOutcomes
             .filter((outcome) => outcome.status === "rejected")
             .map((outcome): OperatorAttentionItem => {
-                const stale = outcome.reason?.toLowerCase().includes("stale") ?? false
+                const stale = isStaleCommandOutcomeForSessions(outcome, fixture.sessions)
                 return {
                     id: `command:${outcome.commandId}`,
                     kind: stale ? "stale-command" : "rejected-command",
