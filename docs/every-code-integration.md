@@ -15,7 +15,7 @@ The Discord bridge currently defines the clearest working version of the Every C
 
 Important existing concepts:
 
-- `SessionHello` identifies a session with `session_id`, `session_epoch`, host label, cwd, branch, and pid.
+- `SessionHello` identifies a session with `session_id`, `session_epoch`, optional stable `host_id`, host label, cwd, branch, and pid.
 - Session epoch protects against stale commands after reconnects.
 - `RemoteCommand` covers reply, continue, pause, end, status, and requested-input responses.
 - Approval requests are explicit and require approve/deny decisions.
@@ -43,8 +43,9 @@ Code Everywhere should use separate identity concepts:
   loopback-only by default, or a configured shared token when protected or bound
   beyond loopback.
 - **Host identity**: the machine or runtime installation that launches trusted
-  Every Code sessions. Current projections expose only `hostLabel`, cwd, branch,
-  pid, and model; there is no durable `hostId` yet.
+  Every Code sessions. Current projections support optional `hostId` alongside
+  `hostLabel`, cwd, branch, pid, and model so legacy publishers can continue
+  without host trust while newer publishers can provide stable host identity.
 - **Session identity**: the runtime session represented by `sessionId` and the
   reconnect/staleness scope represented by `sessionEpoch`. Commands and pending
   work must keep using both values.
@@ -72,7 +73,8 @@ local source of trusted records.
 Before LAN, hosted relay, or Apple notification work, the missing durable fields
 to add are:
 
-- a stable host identifier separate from human-readable `hostLabel`
+- Every Code overlay publication of a stable host identifier separate from
+  human-readable `hostLabel`
 - an operator/account identifier for clients that can enqueue commands
 - a device identifier for native clients and notification routing
 

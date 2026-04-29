@@ -92,6 +92,7 @@ export type OperatorAttentionSummary = {
 }
 
 const sessionBase = {
+    hostId: "host-callisto-mbp",
     hostLabel: "Callisto MBP",
     cwd: "~/Developer/code-everywhere",
     branch: "main",
@@ -538,6 +539,7 @@ const createCockpitFixtureFromSource = (fixture: SourceCockpitFixture, snapshot:
 const toEveryCodeSession = (session: SourceCockpitSession): EveryCodeSession => ({
     sessionId: session.sessionId,
     sessionEpoch: session.sessionEpoch,
+    ...(session.hostId === undefined ? {} : { hostId: session.hostId }),
     hostLabel: session.hostLabel,
     cwd: session.cwd,
     branch: session.branch,

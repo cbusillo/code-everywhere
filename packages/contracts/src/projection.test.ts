@@ -11,6 +11,7 @@ import {
 const baseSession: EveryCodeSession = {
     sessionId: "session-1",
     sessionEpoch: "epoch-1",
+    hostId: "host-workhorse",
     hostLabel: "workhorse-mac",
     cwd: "~/code/code-everywhere",
     branch: "main",
@@ -95,10 +96,22 @@ describe("cockpit projection", () => {
         ])
 
         expect(state.sessions["session-1"]?.status).toBe("idle")
+        expect(state.sessions["session-1"]?.hostId).toBe("host-workhorse")
         expect(state.sessions["session-1"]?.currentTurnId).toBe("turn-1")
         expect(state.sessions["session-1"]?.turnIds).toEqual(["turn-1"])
         expect(state.turns["turn-1"]?.status).toBe("completed")
         expect(state.turns["turn-1"]?.steps).toHaveLength(1)
+    })
+
+    it("keeps legacy session hello events without host identity valid", () => {
+        const legacySession: EveryCodeSession = {
+            ...baseSession,
+        }
+        delete legacySession.hostId
+        const state = projectCockpitEvents([{ kind: "session_hello", session: legacySession }])
+
+        expect(state.sessions["session-1"]?.hostLabel).toBe("workhorse-mac")
+        expect(state.sessions["session-1"]?.hostId).toBeUndefined()
     })
 
     it("keeps replayed turn steps idempotent", () => {

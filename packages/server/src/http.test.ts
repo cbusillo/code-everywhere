@@ -16,6 +16,7 @@ import { createCockpitHttpServer } from "./http"
 const baseSession: EveryCodeSession = {
     sessionId: "session-1",
     sessionEpoch: "epoch-1",
+    hostId: "host-workhorse",
     hostLabel: "workhorse-mac",
     cwd: "~/code/code-everywhere",
     branch: "main",
@@ -144,11 +145,29 @@ describe("cockpit HTTP transport", () => {
         expect(approvalResponse.statusCode).toBe(200)
         const body = approvalResponse.body as CockpitIngestionSnapshot
 
+        expect(body.sessions[0]?.hostId).toBe("host-workhorse")
         expect(body).toMatchObject({
             eventCount: 2,
             attentionSessionIds: ["session-1"],
         })
         expect(body.state.pendingApprovals["approval-1"]).toEqual(baseApproval)
+    })
+
+    it("keeps legacy session hello payloads without host identity valid", async () => {
+        const legacySession: EveryCodeSession = { ...baseSession }
+        delete legacySession.hostId
+
+        const response = await sendJson(baseUrl, "POST", "/events", {
+            event: {
+                kind: "session_hello",
+                session: legacySession,
+            },
+        })
+
+        expect(response.statusCode).toBe(200)
+        const body = response.body as CockpitIngestionSnapshot
+        expect(body.sessions[0]?.hostLabel).toBe("workhorse-mac")
+        expect(body.sessions[0]?.hostId).toBeUndefined()
     })
 
     it("ingests command outcome events", async () => {
