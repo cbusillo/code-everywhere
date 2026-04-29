@@ -50,7 +50,7 @@ const run = async () => {
         })
 
         await clickFirstCommandButton(uiBrowser, session, "Status")
-        const outcome = await waitForCommandOutcome(brokerUrl, "status_request")
+        const outcome = await waitForCommandOutcome(brokerUrl, "status_request", tuiSession)
         assertEqual(outcome.status, "accepted", "status command outcome")
         assertEqual(outcome.sessionId, tuiSession.sessionId, "status command session")
         assertEqual(outcome.sessionEpoch, tuiSession.sessionEpoch, "status command epoch")
@@ -59,8 +59,9 @@ const run = async () => {
             state: "accepted",
             detail: "Claimed by Every Code",
         })
+        await waitForTuiIdleSession(brokerUrl, tuiSession)
         await clickFirstCommandButton(uiBrowser, session, "Pause")
-        const pauseOutcome = await waitForCommandOutcome(brokerUrl, "pause_current_turn")
+        const pauseOutcome = await waitForCommandOutcome(brokerUrl, "pause_current_turn", tuiSession)
         assertEqual(pauseOutcome.status, "rejected", "idle pause command outcome")
         assertEqual(pauseOutcome.reason, "no active turn is running", "idle pause rejection reason")
         assertEqual(pauseOutcome.sessionId, tuiSession.sessionId, "idle pause command session")
@@ -70,8 +71,9 @@ const run = async () => {
             state: "rejected",
             detail: "no active turn is running",
         })
+        await waitForTuiIdleSession(brokerUrl, tuiSession)
         await clickFirstCommandButton(uiBrowser, session, "Continue")
-        const continueOutcome = await waitForCommandOutcome(brokerUrl, "continue_autonomously")
+        const continueOutcome = await waitForCommandOutcome(brokerUrl, "continue_autonomously", tuiSession)
         assertEqual(continueOutcome.status, "rejected", "idle continue command outcome")
         assertEqual(continueOutcome.reason, "no prior session history to continue", "idle continue rejection reason")
         assertEqual(continueOutcome.sessionId, tuiSession.sessionId, "idle continue command session")
@@ -99,7 +101,7 @@ const run = async () => {
         })
 
         await sendReply(uiBrowser, session, "Real TUI reply smoke: acknowledge this control message only.")
-        const replyOutcome = await waitForCommandOutcome(brokerUrl, "reply")
+        const replyOutcome = await waitForCommandOutcome(brokerUrl, "reply", tuiSession)
         assertEqual(replyOutcome.status, "accepted", "reply command outcome")
         assertEqual(replyOutcome.sessionId, tuiSession.sessionId, "reply command session")
         assertEqual(replyOutcome.sessionEpoch, tuiSession.sessionEpoch, "reply command epoch")
@@ -110,7 +112,7 @@ const run = async () => {
         })
 
         await clickEndSessionButton(uiBrowser, session)
-        const endOutcome = await waitForCommandOutcome(brokerUrl, "end_session")
+        const endOutcome = await waitForCommandOutcome(brokerUrl, "end_session", tuiSession)
         assertEqual(endOutcome.status, "accepted", "end session command outcome")
         assertEqual(endOutcome.sessionId, tuiSession.sessionId, "end session command session")
         assertEqual(endOutcome.sessionEpoch, tuiSession.sessionEpoch, "end session command epoch")
@@ -187,11 +189,32 @@ const waitForTuiSession = async (brokerUrl) => {
     throw new Error("Timed out waiting for real TUI session hello")
 }
 
-const waitForCommandOutcome = async (brokerUrl, commandKind) => {
+const waitForTuiIdleSession = async (brokerUrl, expectedSession) => {
+    const startedAt = Date.now()
+    while (Date.now() - startedAt < 10000) {
+        const snapshot = await getJson(`${brokerUrl}/snapshot`)
+        const session = snapshot.sessions.find(
+            (candidate) =>
+                candidate.sessionId === expectedSession.sessionId && candidate.sessionEpoch === expectedSession.sessionEpoch,
+        )
+        if (session?.status === "idle" && session.currentTurnId === null) {
+            return session
+        }
+        await delay(250)
+    }
+    throw new Error(`Timed out waiting for real TUI session ${expectedSession.sessionId} to be idle`)
+}
+
+const waitForCommandOutcome = async (brokerUrl, commandKind, expectedSession) => {
     const startedAt = Date.now()
     while (Date.now() - startedAt < 20000) {
         const snapshot = await getJson(`${brokerUrl}/snapshot`)
-        const outcome = Object.values(snapshot.state.commandOutcomes).find((candidate) => candidate.commandKind === commandKind)
+        const outcome = Object.values(snapshot.state.commandOutcomes).find(
+            (candidate) =>
+                candidate.commandKind === commandKind &&
+                candidate.sessionId === expectedSession.sessionId &&
+                candidate.sessionEpoch === expectedSession.sessionEpoch,
+        )
         if (outcome !== undefined) {
             return outcome
         }
