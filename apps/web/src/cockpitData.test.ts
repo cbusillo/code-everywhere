@@ -6,6 +6,7 @@ import {
     cockpitFixtureSnapshot,
     createCockpitFixtureFromSnapshot,
     getAttentionSessions,
+    getOperatorAttentionSummary,
     statusLabels,
 } from "./cockpitData"
 
@@ -72,6 +73,50 @@ describe("cockpit fake data", () => {
             "Needs input",
             "Blocked",
             "Error",
+        ])
+    })
+
+    it("derives operator attention items from pending work, sessions, and command outcomes", () => {
+        const summary = getOperatorAttentionSummary({
+            ...cockpitFixture,
+            commandOutcomes: [
+                {
+                    commandId: "command-stale",
+                    sessionId: "ce-alpha",
+                    sessionEpoch: "epoch-34",
+                    commandKind: "approval_decision",
+                    status: "rejected",
+                    reason: "stale session scope: command targeted an old epoch",
+                    handledAt: "2026-04-27T16:06:00.000Z",
+                },
+                {
+                    commandId: "command-rejected",
+                    sessionId: "ce-gamma",
+                    sessionEpoch: "epoch-7",
+                    commandKind: "pause_current_turn",
+                    status: "rejected",
+                    reason: "no active turn is running",
+                    handledAt: "2026-04-27T16:07:00.000Z",
+                },
+            ],
+        })
+
+        expect(summary.nextItem).toMatchObject({ kind: "approval", sessionId: "ce-alpha" })
+        expect(summary.counts).toMatchObject({
+            approval: 1,
+            input: 1,
+            error: 1,
+            blocked: 1,
+            "stale-command": 1,
+            "rejected-command": 1,
+        })
+        expect(summary.items.map((item) => item.kind)).toEqual([
+            "approval",
+            "input",
+            "error",
+            "blocked",
+            "stale-command",
+            "rejected-command",
         ])
     })
 })

@@ -5,6 +5,7 @@ import type {
     PendingApproval,
     ProjectedCockpitSession,
     RequestedInput,
+    SessionCommand,
     SessionId,
     SessionStatus,
     SessionTurn,
@@ -38,6 +39,24 @@ export type CockpitFixture = {
     requestedInputs: RequestedInput[]
     commandOutcomes: CommandOutcome[]
     commands: CockpitCommandRecord[]
+}
+
+export type OperatorAttentionKind = "approval" | "input" | "error" | "blocked" | "stale-command" | "rejected-command"
+
+export type OperatorAttentionItem = {
+    id: string
+    kind: OperatorAttentionKind
+    sessionId: SessionId
+    sessionEpoch: string
+    title: string
+    detail: string
+    timestamp: string
+}
+
+export type OperatorAttentionSummary = {
+    items: OperatorAttentionItem[]
+    counts: Record<OperatorAttentionKind, number>
+    nextItem: OperatorAttentionItem | undefined
 }
 
 const sessionBase = {
@@ -527,3 +546,105 @@ export const getSessionById = (sessionId: SessionId): CockpitSession => {
 
 export const getAttentionSessions = (sessions: CockpitSession[]): CockpitSession[] =>
     sessions.filter((session) => session.attention !== "none")
+
+export const getOperatorAttentionSummary = (
+    fixture: Pick<CockpitFixture, "approvals" | "commandOutcomes" | "requestedInputs" | "sessions">,
+): OperatorAttentionSummary => {
+    const items: OperatorAttentionItem[] = [
+        ...fixture.approvals.map(
+            (approval): OperatorAttentionItem => ({
+                id: `approval:${approval.id}`,
+                kind: "approval",
+                sessionId: approval.sessionId,
+                sessionEpoch: approval.sessionEpoch,
+                title: approval.title,
+                detail: `${approval.risk} risk approval requested`,
+                timestamp: approval.requestedAt,
+            }),
+        ),
+        ...fixture.requestedInputs.map(
+            (input): OperatorAttentionItem => ({
+                id: `input:${input.id}`,
+                kind: "input",
+                sessionId: input.sessionId,
+                sessionEpoch: input.sessionEpoch,
+                title: input.title,
+                detail: `${String(input.questions.length)} requested input ${input.questions.length === 1 ? "question" : "questions"}`,
+                timestamp: input.requestedAt,
+            }),
+        ),
+        ...fixture.sessions
+            .filter((session) => session.attention === "error" || session.attention === "blocked")
+            .map(
+                (session): OperatorAttentionItem => ({
+                    id: `session:${session.sessionId}:${session.attention}`,
+                    kind: session.attention === "error" ? "error" : "blocked",
+                    sessionId: session.sessionId,
+                    sessionEpoch: session.sessionEpoch,
+                    title: session.summary,
+                    detail: statusLabels[session.status],
+                    timestamp: session.updatedAt,
+                }),
+            ),
+        ...fixture.commandOutcomes
+            .filter((outcome) => outcome.status === "rejected")
+            .map((outcome): OperatorAttentionItem => {
+                const stale = outcome.reason?.toLowerCase().includes("stale") ?? false
+                return {
+                    id: `command:${outcome.commandId}`,
+                    kind: stale ? "stale-command" : "rejected-command",
+                    sessionId: outcome.sessionId,
+                    sessionEpoch: outcome.sessionEpoch,
+                    title: formatAttentionCommandKind(outcome.commandKind),
+                    detail: outcome.reason ?? "Command rejected by Every Code",
+                    timestamp: outcome.handledAt,
+                }
+            }),
+    ].sort(compareAttentionItems)
+
+    return {
+        items,
+        counts: getAttentionCounts(items),
+        nextItem: items.at(0),
+    }
+}
+
+const attentionPriority: Record<OperatorAttentionKind, number> = {
+    approval: 0,
+    input: 1,
+    error: 2,
+    blocked: 3,
+    "stale-command": 4,
+    "rejected-command": 5,
+}
+
+const emptyAttentionCounts = (): Record<OperatorAttentionKind, number> => ({
+    approval: 0,
+    input: 0,
+    error: 0,
+    blocked: 0,
+    "stale-command": 0,
+    "rejected-command": 0,
+})
+
+const getAttentionCounts = (items: OperatorAttentionItem[]): Record<OperatorAttentionKind, number> => {
+    const counts = emptyAttentionCounts()
+    for (const item of items) {
+        counts[item.kind] += 1
+    }
+    return counts
+}
+
+const compareAttentionItems = (left: OperatorAttentionItem, right: OperatorAttentionItem): number => {
+    const priorityDelta = attentionPriority[left.kind] - attentionPriority[right.kind]
+    if (priorityDelta !== 0) {
+        return priorityDelta
+    }
+    return right.timestamp.localeCompare(left.timestamp)
+}
+
+const formatAttentionCommandKind = (kind: SessionCommand["kind"]): string =>
+    kind
+        .split("_")
+        .map((part) => `${part[0]?.toUpperCase() ?? ""}${part.slice(1)}`)
+        .join(" ")
