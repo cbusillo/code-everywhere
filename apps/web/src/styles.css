@@ -1013,10 +1013,15 @@ input:focus {
     font-size: 11px;
 }
 
-.trust-registry-empty {
+.trust-registry-empty,
+.trust-registry-error {
     color: var(--fg-3);
     font-size: 12px;
     white-space: normal;
+}
+
+.trust-registry-error {
+    color: #991b1b;
 }
 
 .trust-record-list {

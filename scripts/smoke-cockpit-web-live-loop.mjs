@@ -41,6 +41,7 @@ const run = async () => {
             detail: "Broker/web smoke step complete.",
         })
 
+        await clickSessionButton(uiBrowser, session, "smoke-live-session")
         await clickFirstCommandButton(uiBrowser, session, "Trust")
         await waitForTrustedHost(brokerUrl, "smoke-host")
         await waitForBrowserState(uiBrowser, session, {
@@ -297,6 +298,13 @@ const clickFirstCommandButton = async (uiBrowser, session, label) => {
     await ui(uiBrowser, session, [
         "eval",
         `(() => { const label = ${JSON.stringify(label)}; const button = Array.from(document.querySelectorAll('button')).find((candidate) => candidate.innerText.trim() === label); if (!button) throw new Error(label + ' button not found'); button.click(); return true; })()`,
+    ])
+}
+
+const clickSessionButton = async (uiBrowser, session, sessionId) => {
+    await ui(uiBrowser, session, [
+        "eval",
+        `(() => { const sessionId = ${JSON.stringify(sessionId)}; const label = Array.from(document.querySelectorAll('.session-id')).find((candidate) => candidate.textContent?.trim() === sessionId); const button = label?.closest('button'); if (!button) throw new Error(sessionId + ' session button not found'); button.click(); return true; })()`,
     ])
 }
 

@@ -34,7 +34,7 @@ import {
     TerminalSquare,
     X,
 } from "lucide-react"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 
 import { canPostCockpitCommand, postCockpitCommand } from "./cockpitCommands"
 import {
@@ -195,6 +195,7 @@ export const App = () => {
         status: "unavailable",
         message: "Connect to a live broker to review local trust records.",
     })
+    const trustRegistryRequestId = useRef(0)
     const fallbackSession = cockpit.sessions[0]
     const activeSession =
         fallbackSession === undefined
@@ -233,6 +234,7 @@ export const App = () => {
 
         let isActive = true
         const transportUrl = cockpitView.transport.url
+        const requestId = (trustRegistryRequestId.current += 1)
         setTrustRegistry((current) => ({
             snapshot: current.snapshot,
             status: current.snapshot === null ? "loading" : "ready",
@@ -240,13 +242,13 @@ export const App = () => {
         }))
         void fetchLocalTrustRegistry(transportUrl)
             .then((snapshot) => {
-                if (!isActive) {
+                if (!isActive || requestId !== trustRegistryRequestId.current) {
                     return
                 }
                 setTrustRegistry({ snapshot, status: "ready", message: "Local trust records loaded." })
             })
             .catch((error: unknown) => {
-                if (!isActive) {
+                if (!isActive || requestId !== trustRegistryRequestId.current) {
                     return
                 }
                 setTrustRegistry((current) => ({
@@ -318,6 +320,7 @@ export const App = () => {
                     session.hostId === undefined
                         ? undefined
                         : snapshot.hosts.find((candidate) => candidate.hostId === session.hostId)
+                trustRegistryRequestId.current += 1
                 setTrustRegistry({ snapshot, status: "ready", message: "Local trust records loaded." })
                 setTrustLog(`${label} saved for ${session.hostLabel}; ${host?.status ?? "host record updated"}`)
             })
@@ -336,6 +339,7 @@ export const App = () => {
         void postRevokedHostId(cockpitView.transport.url, host.hostId)
             .then((snapshot) => {
                 const updatedHost = snapshot.hosts.find((candidate) => candidate.hostId === host.hostId)
+                trustRegistryRequestId.current += 1
                 setTrustRegistry({ snapshot, status: "ready", message: "Local trust records loaded." })
                 setTrustLog(`Revoke host saved for ${host.label}; ${updatedHost?.status ?? "host record updated"}`)
             })
@@ -937,6 +941,7 @@ const TrustRegistryList = ({
                 <span>Known hosts</span>
                 <strong>{hosts.length}</strong>
             </div>
+            {registry.status === "error" ? <p className="trust-registry-error">{registry.message}</p> : null}
             {sortedHosts.length === 0 ? (
                 <p className="trust-registry-empty">{registry.message}</p>
             ) : (
