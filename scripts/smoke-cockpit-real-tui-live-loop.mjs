@@ -54,12 +54,22 @@ const run = async () => {
         assertEqual(outcome.status, "accepted", "status command outcome")
         assertEqual(outcome.sessionId, tuiSession.sessionId, "status command session")
         assertEqual(outcome.sessionEpoch, tuiSession.sessionEpoch, "status command epoch")
+        await waitForCommandHistoryEntry(uiBrowser, session, {
+            label: "Status Request",
+            state: "accepted",
+            detail: "Claimed by Every Code",
+        })
         await clickFirstCommandButton(uiBrowser, session, "Pause")
         const pauseOutcome = await waitForCommandOutcome(brokerUrl, "pause_current_turn")
         assertEqual(pauseOutcome.status, "rejected", "idle pause command outcome")
         assertEqual(pauseOutcome.reason, "no active turn is running", "idle pause rejection reason")
         assertEqual(pauseOutcome.sessionId, tuiSession.sessionId, "idle pause command session")
         assertEqual(pauseOutcome.sessionEpoch, tuiSession.sessionEpoch, "idle pause command epoch")
+        await waitForCommandHistoryEntry(uiBrowser, session, {
+            label: "Pause Current Turn",
+            state: "rejected",
+            detail: "no active turn is running",
+        })
 
         await stopProcess(broker)
         broker = null
@@ -82,6 +92,11 @@ const run = async () => {
         assertEqual(replyOutcome.status, "accepted", "reply command outcome")
         assertEqual(replyOutcome.sessionId, tuiSession.sessionId, "reply command session")
         assertEqual(replyOutcome.sessionEpoch, tuiSession.sessionEpoch, "reply command epoch")
+        await waitForCommandHistoryEntry(uiBrowser, session, {
+            label: "Reply",
+            state: "accepted",
+            detail: "Claimed by Every Code",
+        })
 
         stdout.write(
             `Cockpit real TUI live-loop smoke passed at ${webUrl} using broker ${brokerUrl} and session ${tuiSession.sessionId}\n`,
@@ -311,6 +326,24 @@ const sendReply = async (uiBrowser, session, message) => {
         "eval",
         `(() => { const textarea = document.querySelector('#session-reply'); if (!textarea) throw new Error('Reply textarea not found'); const value = ${JSON.stringify(message)}; const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set; setter.call(textarea, value); textarea.dispatchEvent(new Event('input', { bubbles: true })); const button = Array.from(document.querySelectorAll('button')).find((candidate) => candidate.innerText.trim() === 'Send'); if (!button) throw new Error('Send button not found'); button.click(); return true; })()`,
     ])
+}
+
+const waitForCommandHistoryEntry = async (uiBrowser, session, expected) => {
+    const startedAt = Date.now()
+    while (Date.now() - startedAt < 10000) {
+        const raw = await ui(uiBrowser, session, [
+            "eval",
+            "(() => Array.from(document.querySelectorAll('.command-history-row')).map((row) => ({ state: row.querySelector('.command-state')?.textContent?.trim() ?? '', label: row.querySelector('strong')?.textContent?.trim() ?? '', detail: row.querySelector('p')?.textContent?.trim() ?? '' })))()",
+        ])
+        const entries = JSON.parse(raw)
+        const entry = entries.find((candidate) => candidate.label === expected.label && candidate.state === expected.state)
+        if (entry !== undefined && entry.detail.includes(expected.detail)) {
+            return
+        }
+        await delay(250)
+    }
+
+    throw new Error(`Timed out waiting for command history entry ${expected.label} / ${expected.state} / ${expected.detail}`)
 }
 
 const assertEqual = (actual, expected, label) => {
