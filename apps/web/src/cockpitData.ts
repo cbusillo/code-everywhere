@@ -48,6 +48,7 @@ export type OperatorAttentionItem = {
     kind: OperatorAttentionKind
     sessionId: SessionId
     sessionEpoch: string
+    pendingItemId?: string
     title: string
     detail: string
     timestamp: string
@@ -557,17 +558,19 @@ export const getOperatorAttentionSummary = (
                 kind: "approval",
                 sessionId: approval.sessionId,
                 sessionEpoch: approval.sessionEpoch,
+                pendingItemId: approval.id,
                 title: approval.title,
                 detail: `${approval.risk} risk approval requested`,
                 timestamp: approval.requestedAt,
             }),
         ),
-        ...fixture.requestedInputs.map(
+        ...fixture.requestedInputs.filter(hasActionableRequestedInput).map(
             (input): OperatorAttentionItem => ({
                 id: `input:${input.id}`,
                 kind: "input",
                 sessionId: input.sessionId,
                 sessionEpoch: input.sessionEpoch,
+                pendingItemId: input.id,
                 title: input.title,
                 detail: `${String(input.questions.length)} requested input ${input.questions.length === 1 ? "question" : "questions"}`,
                 timestamp: input.requestedAt,
@@ -648,3 +651,5 @@ const formatAttentionCommandKind = (kind: SessionCommand["kind"]): string =>
         .split("_")
         .map((part) => `${part[0]?.toUpperCase() ?? ""}${part.slice(1)}`)
         .join(" ")
+
+export const hasActionableRequestedInput = (input: RequestedInput): boolean => input.questions.length > 0

@@ -39,6 +39,7 @@ import { canPostCockpitCommand, postCockpitCommand } from "./cockpitCommands"
 import {
     getAttentionSessions,
     getOperatorAttentionSummary,
+    hasActionableRequestedInput,
     statusLabels,
     type CockpitSession,
     type OperatorAttentionItem,
@@ -146,6 +147,7 @@ export const App = () => {
     const cockpitView = useCockpitView()
     const cockpit = cockpitView.fixture
     const [activeSessionId, setActiveSessionId] = useState(selectedSessionId)
+    const [activePendingItemId, setActivePendingItemId] = useState<string | null>(null)
     const [replyDrafts, setReplyDrafts] = useState<DraftMap>({})
     const [inputAnswerDrafts, setInputAnswerDrafts] = useState<DraftMap>({})
     const [commandLog, setCommandLog] = useState("No command sent yet")
@@ -156,8 +158,15 @@ export const App = () => {
             : (cockpit.sessions.find((session) => session.sessionId === activeSessionId) ?? fallbackSession)
     const attentionSessions = useMemo(() => getAttentionSessions(cockpit.sessions), [cockpit.sessions])
     const attentionSummary = useMemo(() => getOperatorAttentionSummary(cockpit), [cockpit])
-    const activeApproval = cockpit.approvals.find((approval) => approval.sessionId === activeSession?.sessionId)
-    const activeInput = cockpit.requestedInputs.find((input) => input.sessionId === activeSession?.sessionId)
+    const sessionApprovals = cockpit.approvals.filter((approval) => approval.sessionId === activeSession?.sessionId)
+    const sessionInputs = cockpit.requestedInputs.filter(
+        (input) => input.sessionId === activeSession?.sessionId && hasActionableRequestedInput(input),
+    )
+    const selectedApproval = sessionApprovals.find((approval) => approval.id === activePendingItemId)
+    const selectedInput = sessionInputs.find((input) => input.id === activePendingItemId)
+    const activeApproval =
+        activePendingItemId === null || selectedApproval !== undefined ? (selectedApproval ?? sessionApprovals[0]) : undefined
+    const activeInput = activePendingItemId === null || selectedInput !== undefined ? (selectedInput ?? sessionInputs[0]) : undefined
     const activeCommandHistory = getCommandHistoryEntries(cockpit.commands, cockpit.commandOutcomes, activeSession)
     const reply = getDraftValue(replyDrafts, activeSession?.sessionId)
     const inputAnswerValues = getRequestedInputAnswerValues(inputAnswerDrafts, activeInput)
@@ -206,6 +215,16 @@ export const App = () => {
             })
     }
 
+    const selectSession = (sessionId: string) => {
+        setActiveSessionId(sessionId)
+        setActivePendingItemId(null)
+    }
+
+    const selectAttentionItem = (item: OperatorAttentionItem) => {
+        setActiveSessionId(item.sessionId)
+        setActivePendingItemId(item.pendingItemId ?? null)
+    }
+
     return (
         <main className="app-shell">
             <div className="app-frame">
@@ -227,13 +246,13 @@ export const App = () => {
                     </div>
                 </header>
 
-                <AttentionOverview summary={attentionSummary} onSelectSession={setActiveSessionId} />
+                <AttentionOverview summary={attentionSummary} onSelectItem={selectAttentionItem} />
 
                 <section className="cockpit-grid" aria-label="Every Code sessions cockpit">
                     <SessionList
                         sessions={cockpit.sessions}
                         activeSessionId={activeSession?.sessionId ?? ""}
-                        onSelect={setActiveSessionId}
+                        onSelect={selectSession}
                     />
                     {activeSession === undefined ? (
                         <>
@@ -315,10 +334,10 @@ const SessionList = ({ sessions, activeSessionId, onSelect }: SessionListProps) 
 
 type AttentionOverviewProps = {
     summary: OperatorAttentionSummary
-    onSelectSession: (sessionId: string) => void
+    onSelectItem: (item: OperatorAttentionItem) => void
 }
 
-const AttentionOverview = ({ summary, onSelectSession }: AttentionOverviewProps) => {
+const AttentionOverview = ({ summary, onSelectItem }: AttentionOverviewProps) => {
     const nextItem = summary.nextItem
 
     return (
@@ -331,7 +350,7 @@ const AttentionOverview = ({ summary, onSelectSession }: AttentionOverviewProps)
                         <span>No pending operator attention in this snapshot.</span>
                     </div>
                 ) : (
-                    <AttentionNextButton item={nextItem} onSelectSession={onSelectSession} />
+                    <AttentionNextButton item={nextItem} onSelectItem={onSelectItem} />
                 )}
             </div>
             <div className="attention-metrics" aria-label="Attention counts">
@@ -350,15 +369,15 @@ const attentionMetricKinds: OperatorAttentionKind[] = ["approval", "input", "err
 
 const AttentionNextButton = ({
     item,
-    onSelectSession,
+    onSelectItem,
 }: {
     item: OperatorAttentionItem
-    onSelectSession: (sessionId: string) => void
+    onSelectItem: (item: OperatorAttentionItem) => void
 }) => {
     const Icon = attentionIcon[item.kind]
 
     return (
-        <button className={`attention-next-button is-${item.kind}`} type="button" onClick={() => onSelectSession(item.sessionId)}>
+        <button className={`attention-next-button is-${item.kind}`} type="button" onClick={() => onSelectItem(item)}>
             <Icon size={16} aria-hidden="true" />
             <span className="attention-kind">{attentionLabels[item.kind]}</span>
             <strong>{item.title}</strong>

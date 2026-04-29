@@ -101,7 +101,11 @@ describe("cockpit fake data", () => {
             ],
         })
 
-        expect(summary.nextItem).toMatchObject({ kind: "approval", sessionId: "ce-alpha" })
+        expect(summary.nextItem).toMatchObject({
+            kind: "approval",
+            pendingItemId: "approval-install-deps",
+            sessionId: "ce-alpha",
+        })
         expect(summary.counts).toMatchObject({
             approval: 1,
             input: 1,
@@ -118,5 +122,24 @@ describe("cockpit fake data", () => {
             "stale-command",
             "rejected-command",
         ])
+    })
+
+    it("excludes requested inputs without actionable questions from operator attention", () => {
+        const emptyInput = {
+            id: "input-empty",
+            sessionId: "ce-alpha",
+            sessionEpoch: "epoch-34",
+            turnId: "turn-alpha-3",
+            title: "No questions available",
+            requestedAt: "2026-04-27T16:08:00.000Z",
+            questions: [],
+        }
+        const summary = getOperatorAttentionSummary({
+            ...cockpitFixture,
+            requestedInputs: [...cockpitFixture.requestedInputs, emptyInput],
+        })
+
+        expect(summary.counts.input).toBe(1)
+        expect(summary.items.some((item) => item.id === "input:input-empty")).toBe(false)
     })
 })
