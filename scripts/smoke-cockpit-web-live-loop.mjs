@@ -21,15 +21,23 @@ const run = async () => {
     try {
         broker = startBroker(brokerPort)
         await waitForHttp(`${brokerUrl}/snapshot`, "cockpit broker")
-        await postJson(`${brokerUrl}/events`, { events: createLiveLoopEvents("Smoke broker live loop") })
 
         web = startWeb(webPort, brokerUrl)
         await waitForHttp(webUrl, "web cockpit")
 
         await ui(uiBrowser, session, ["open", webUrl, "1000"])
+        await ui(uiBrowser, session, ["wait-for", "text=No live sessions", "10000"])
+        await assertBrowserState(uiBrowser, session, {
+            mode: "Live HTTP",
+            state: "No live sessions",
+            detail: "no trusted Every Code sessions",
+        })
+
+        await postJson(`${brokerUrl}/events`, { events: createLiveLoopEvents("Smoke broker live loop") })
         await ui(uiBrowser, session, ["wait-for", "text=Smoke broker live loop", "10000"])
         await assertBrowserState(uiBrowser, session, {
             mode: "Live HTTP",
+            state: "Stale event evidence retained",
             summary: "Smoke broker live loop",
             sessionId: "smoke-live-session",
             detail: "Broker/web smoke step complete.",
@@ -47,6 +55,7 @@ const run = async () => {
         await ui(uiBrowser, session, ["wait-for", "text=HTTP fallback", "10000"])
         await assertBrowserState(uiBrowser, session, {
             mode: "HTTP fallback",
+            state: "Broker reconnecting",
             summary: "Smoke broker live loop",
             sessionId: "smoke-live-session",
             detail: "Broker/web smoke step complete.",
@@ -320,6 +329,20 @@ const createLiveLoopEvents = (summary) => [
             startedAt: "2026-04-28T12:30:00.000Z",
             updatedAt: "2026-04-28T12:30:00.000Z",
             currentTurnId: null,
+        },
+    },
+    {
+        kind: "turn_step_added",
+        sessionId: "smoke-live-session",
+        sessionEpoch: "smoke-stale-epoch",
+        turnId: "smoke-live-turn",
+        step: {
+            id: "smoke-stale-step",
+            kind: "status",
+            title: "Stale status",
+            detail: "This stale smoke event should be visible as bounded evidence.",
+            timestamp: "2026-04-28T12:30:01.500Z",
+            state: "completed",
         },
     },
     {

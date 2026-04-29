@@ -9,6 +9,7 @@ import type {
     SessionId,
     SessionStatus,
     SessionTurn,
+    StaleCockpitEvent,
 } from "@code-everywhere/contracts"
 import type { CockpitCommandRecord, CockpitIngestionSnapshot } from "@code-everywhere/server"
 import { createCockpitEventStore } from "@code-everywhere/server"
@@ -25,6 +26,7 @@ type SourceCockpitFixture = {
     requestedInputs: RequestedInput[]
     commandOutcomes: CommandOutcome[]
     commands: CockpitCommandRecord[]
+    staleEvents: StaleCockpitEvent[]
 }
 
 export type CockpitSession = ProjectedCockpitSession & {
@@ -39,6 +41,7 @@ export type CockpitFixture = {
     requestedInputs: RequestedInput[]
     commandOutcomes: CommandOutcome[]
     commands: CockpitCommandRecord[]
+    staleEvents: StaleCockpitEvent[]
 }
 
 export type OperatorAttentionKind = "approval" | "input" | "error" | "blocked" | "stale-command" | "rejected-command"
@@ -417,6 +420,7 @@ const cockpitFixtureSource: SourceCockpitFixture = {
     ],
     commandOutcomes: [],
     commands: [],
+    staleEvents: [],
 }
 
 export const createCockpitFixtureEvents = (fixture: SourceCockpitFixture): CockpitProjectionEvent[] => [
@@ -478,6 +482,7 @@ export const createCockpitFixtureFromSnapshot = (
             right.handledAt.localeCompare(left.handledAt),
         ),
         commands: [...(options.commands ?? [])].sort((left, right) => right.receivedAt.localeCompare(left.receivedAt)),
+        staleEvents: [...snapshot.state.staleEvents].sort((left, right) => right.receivedAt.localeCompare(left.receivedAt)),
     }
 }
 

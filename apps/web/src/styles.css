@@ -113,6 +113,49 @@ button {
     gap: 8px;
 }
 
+.state-banner {
+    display: flex;
+    min-height: 34px;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid var(--border-default);
+    border-bottom: 0;
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+    background: var(--bg-elevated);
+    padding: 7px 12px;
+}
+
+.state-banner + .attention-overview {
+    border-radius: 0;
+}
+
+.state-banner > strong {
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.state-banner > p {
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    color: var(--fg-2);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.state-banner.is-info > svg {
+    color: var(--info);
+}
+
+.state-banner.is-warning > svg {
+    color: var(--warning);
+}
+
+.state-banner.is-success > svg {
+    color: var(--success);
+}
+
 .attention-overview {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
@@ -1333,6 +1376,14 @@ legend {
 
     .attention-overview {
         grid-template-columns: 1fr;
+    }
+
+    .state-banner {
+        align-items: flex-start;
+    }
+
+    .state-banner > p {
+        white-space: normal;
     }
 
     .attention-next-button {

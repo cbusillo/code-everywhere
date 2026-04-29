@@ -86,7 +86,36 @@ describe("cockpit HTTP transport client", () => {
             requestedInputs: [],
             commandOutcomes: [],
             commands: [],
+            staleEvents: [],
         })
+    })
+
+    it("exposes stale event evidence to the cockpit fixture", () => {
+        const fixture = createCockpitFixtureFromSnapshot({
+            ...cockpitFixtureSnapshot,
+            state: {
+                ...cockpitFixtureSnapshot.state,
+                staleEvents: [
+                    {
+                        eventKind: "turn_step_added",
+                        sessionId: "ce-alpha",
+                        eventEpoch: "old-epoch",
+                        currentEpoch: "epoch-34",
+                        receivedAt: "2026-04-27T16:10:00.000Z",
+                    },
+                ],
+            },
+        })
+
+        expect(fixture.staleEvents).toEqual([
+            {
+                eventKind: "turn_step_added",
+                sessionId: "ce-alpha",
+                eventEpoch: "old-epoch",
+                currentEpoch: "epoch-34",
+                receivedAt: "2026-04-27T16:10:00.000Z",
+            },
+        ])
     })
 
     it("schedules the next poll only after the current request finishes", async () => {
