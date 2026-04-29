@@ -82,6 +82,11 @@ type CockpitFragmentRoute = {
     pendingItemId: string | null
 }
 
+type ActivePendingWork = {
+    approval: PendingApproval | undefined
+    requestedInput: RequestedInput | undefined
+}
+
 type TrustRegistryState = {
     snapshot: LocalTrustRegistrySnapshot | null
     status: "unavailable" | "loading" | "ready" | "error"
@@ -214,11 +219,11 @@ export const App = () => {
     const sessionInputs = cockpit.requestedInputs.filter(
         (input) => input.sessionId === activeSession?.sessionId && hasActionableRequestedInput(input),
     )
-    const selectedApproval = sessionApprovals.find((approval) => approval.id === activePendingItemId)
-    const selectedInput = sessionInputs.find((input) => input.id === activePendingItemId)
-    const activeApproval =
-        activePendingItemId === null || selectedApproval !== undefined ? (selectedApproval ?? sessionApprovals[0]) : undefined
-    const activeInput = activePendingItemId === null || selectedInput !== undefined ? (selectedInput ?? sessionInputs[0]) : undefined
+    const { approval: activeApproval, requestedInput: activeInput } = getActivePendingWork(
+        activePendingItemId,
+        sessionApprovals,
+        sessionInputs,
+    )
     const activeCommandHistory = getCommandHistoryEntries(cockpit.commands, cockpit.commandOutcomes, activeSession)
     const activeCommandOutcomeSummary = getCommandOutcomeSummary(cockpit.commands, cockpit.commandOutcomes, activeSession)
     const reply = getDraftValue(replyDrafts, activeSession?.sessionId)
@@ -1272,6 +1277,28 @@ const emptySessionDetailCopy = (transport: CockpitTransportStatus): string => {
     }
 }
 
+export const getActivePendingWork = (
+    pendingItemId: string | null,
+    approvals: PendingApproval[],
+    requestedInputs: RequestedInput[],
+): ActivePendingWork => {
+    if (pendingItemId === null) {
+        return { approval: approvals[0], requestedInput: requestedInputs[0] }
+    }
+
+    const selectedApproval = approvals.find((approval) => approval.id === pendingItemId)
+    if (selectedApproval !== undefined) {
+        return { approval: selectedApproval, requestedInput: undefined }
+    }
+
+    const selectedInput = requestedInputs.find((input) => input.id === pendingItemId)
+    if (selectedInput !== undefined) {
+        return { approval: undefined, requestedInput: selectedInput }
+    }
+
+    return { approval: approvals[0], requestedInput: requestedInputs[0] }
+}
+
 export const parseCockpitFragmentRoute = (hash: string): CockpitFragmentRoute | null => {
     const fragment = hash.startsWith("#") ? hash.slice(1) : hash
     if (fragment.trim() === "") {
@@ -1281,7 +1308,7 @@ export const parseCockpitFragmentRoute = (hash: string): CockpitFragmentRoute | 
     let url: URL
     try {
         url = new URL(
-            fragment.startsWith("/") ? `http://code-everywhere.local${fragment}` : `http://code-everywhere.local/${fragment}`,
+            fragment.startsWith("/") ? `https://code-everywhere.local${fragment}` : `https://code-everywhere.local/${fragment}`,
         )
     } catch {
         return null
