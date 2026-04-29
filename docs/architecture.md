@@ -70,7 +70,9 @@ Local trust should use a separate broker-owned registry beside broker state,
 such as `.code-everywhere/trust.json`, for non-secret trusted host, device, and
 operator records. Broker auth tokens remain route authorization only. Apple
 clients can keep device-held secrets in Keychain later, while the local broker
-continues to own the trusted-record list for the local deployment mode.
+continues to own the trusted-record list for the local deployment mode. Broker
+snapshots derive session trust from projected `hostId` and the host registry;
+sessions without a host id remain explicit unverified legacy sessions.
 
 ### Clients
 

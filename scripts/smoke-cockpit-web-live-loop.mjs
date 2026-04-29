@@ -30,7 +30,7 @@ const run = async () => {
         await assertBrowserState(uiBrowser, session, {
             mode: "Live HTTP",
             state: "No live sessions",
-            detail: "no trusted Every Code sessions",
+            detail: "no Every Code sessions",
         })
 
         await postJson(`${brokerUrl}/events`, { events: createLiveLoopEvents("Smoke broker live loop") })

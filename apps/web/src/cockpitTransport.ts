@@ -14,6 +14,7 @@ import type {
     TurnStatus,
     TurnStep,
 } from "@code-everywhere/contracts"
+import { createDefaultSessionTrust } from "@code-everywhere/contracts"
 import type { CockpitCommandRecord, CockpitCommandSnapshot, CockpitIngestionSnapshot } from "@code-everywhere/server"
 
 import { fetchCockpitCommands } from "./cockpitCommands"
@@ -268,22 +269,27 @@ const normalizeCockpitIngestionSnapshot = (value: unknown): CockpitIngestionSnap
     }
 
     const state = normalizeCockpitProjectionState(value.state)
-    if (state === null || !isArrayOf(value.sessions, isProjectedCockpitSession) || !isArrayOf(value.attentionSessionIds, isString)) {
+    const sessions = normalizeProjectedCockpitSessions(value.sessions)
+    if (state === null || sessions === null || !isArrayOf(value.attentionSessionIds, isString)) {
         return null
     }
 
     return {
         eventCount: value.eventCount,
         state,
-        sessions: value.sessions,
+        sessions,
         attentionSessionIds: value.attentionSessionIds,
     }
 }
 
 const normalizeCockpitProjectionState = (value: unknown): CockpitProjectionState | null => {
+    if (!isRecord(value)) {
+        return null
+    }
+
+    const sessions = normalizeProjectedCockpitSessionRecord(value.sessions)
     if (
-        !isRecord(value) ||
-        !isRecordOf(value.sessions, isProjectedCockpitSession) ||
+        sessions === null ||
         !isRecordOf(value.turns, isSessionTurn) ||
         !isRecordOf(value.pendingApprovals, isPendingApproval) ||
         !isRecordOf(value.requestedInputs, isRequestedInput) ||
@@ -298,7 +304,7 @@ const normalizeCockpitProjectionState = (value: unknown): CockpitProjectionState
     }
 
     return {
-        sessions: value.sessions,
+        sessions,
         turns: value.turns,
         pendingApprovals: value.pendingApprovals,
         requestedInputs: value.requestedInputs,
@@ -308,7 +314,51 @@ const normalizeCockpitProjectionState = (value: unknown): CockpitProjectionState
     }
 }
 
-const isProjectedCockpitSession = (value: unknown): value is ProjectedCockpitSession =>
+const normalizeProjectedCockpitSessions = (value: unknown): ProjectedCockpitSession[] | null => {
+    if (!Array.isArray(value)) {
+        return null
+    }
+
+    const sessions = value.map(normalizeProjectedCockpitSession)
+    return sessions.every((session): session is ProjectedCockpitSession => session !== null) ? sessions : null
+}
+
+const normalizeProjectedCockpitSessionRecord = (value: unknown): Record<string, ProjectedCockpitSession> | null => {
+    if (!isRecord(value)) {
+        return null
+    }
+
+    const entries = Object.entries(value).map(
+        ([sessionId, session]) => [sessionId, normalizeProjectedCockpitSession(session)] as const,
+    )
+    if (entries.some(([, session]) => session === null)) {
+        return null
+    }
+
+    return Object.fromEntries(entries) as Record<string, ProjectedCockpitSession>
+}
+
+const normalizeProjectedCockpitSession = (value: unknown): ProjectedCockpitSession | null => {
+    if (!isProjectedCockpitSessionBase(value)) {
+        return null
+    }
+
+    const trust = value.trust ?? createDefaultSessionTrust(value)
+    if (!isSessionTrust(trust)) {
+        return null
+    }
+
+    return {
+        ...value,
+        trust,
+    }
+}
+
+const isProjectedCockpitSessionBase = (
+    value: unknown,
+): value is Omit<ProjectedCockpitSession, "trust"> & {
+    trust?: ProjectedCockpitSession["trust"]
+} =>
     isRecord(value) &&
     isString(value.sessionId) &&
     isString(value.sessionEpoch) &&
@@ -327,6 +377,14 @@ const isProjectedCockpitSession = (value: unknown): value is ProjectedCockpitSes
     isArrayOf(value.pendingApprovalIds, isString) &&
     isArrayOf(value.pendingInputIds, isString) &&
     isArrayOf(value.turnIds, isString)
+
+const isSessionTrust = (value: unknown): value is ProjectedCockpitSession["trust"] =>
+    isRecord(value) &&
+    isSessionTrustStatus(value.status) &&
+    isNullableString(value.hostId) &&
+    isString(value.hostLabel) &&
+    isNullableString(value.trustedHostLabel) &&
+    isNullableString(value.lastSeenAt)
 
 const isSessionTurn = (value: unknown): value is SessionTurn =>
     isRecord(value) &&
@@ -431,6 +489,9 @@ const isNullableString = (value: unknown): value is string | null => isString(va
 
 const isSessionStatus = (value: unknown): value is SessionStatus =>
     isOneOf(value, ["running", "idle", "blocked", "waiting-for-input", "waiting-for-approval", "ended", "error"])
+
+const isSessionTrustStatus = (value: unknown): value is ProjectedCockpitSession["trust"]["status"] =>
+    isOneOf(value, ["trusted", "unknown", "revoked", "unidentified"])
 
 const isTurnStatus = (value: unknown): value is TurnStatus =>
     isOneOf(value, ["running", "completed", "blocked", "waiting-for-input", "waiting-for-approval", "error"])

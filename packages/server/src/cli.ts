@@ -174,7 +174,7 @@ export const startCockpitHttpServer = async (
         options.trustFile === undefined || options.trustFile === null
             ? createLocalTrustRegistryStore()
             : createPersistentLocalTrustRegistryStore(options.trustFile)
-    const server = createCockpitHttpServer({ ...(stores ?? {}), authToken })
+    const server = createCockpitHttpServer({ ...(stores ?? {}), trustStore, authToken })
     await new Promise<void>((resolve, reject) => {
         const onError = (error: Error) => {
             server.off("listening", onListening)

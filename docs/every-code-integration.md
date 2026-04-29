@@ -46,6 +46,9 @@ Code Everywhere should use separate identity concepts:
   Every Code sessions. Current projections support optional `hostId` alongside
   `hostLabel`, cwd, branch, pid, and model so legacy publishers can continue
   without host trust while newer publishers can provide stable host identity.
+  Broker snapshots derive each session's trust status from `hostId` and the
+  local trust registry: `trusted`, `unknown`, `revoked`, or `unidentified` when
+  a legacy publisher has no host id.
 - **Session identity**: the runtime session represented by `sessionId` and the
   reconnect/staleness scope represented by `sessionEpoch`. Commands and pending
   work must keep using both values.
@@ -62,19 +65,17 @@ appear without per-session pairing. Pairing every transient session would fight
 the Every Code workflow and should remain a diagnostic or recovery path, not the
 default interaction model.
 
-The first local trust persistence checkpoint should be broker-mediated and
-file-backed: keep trusted host/device/operator records in a separate local trust
-registry such as `.code-everywhere/trust.json`, while leaving broker auth tokens
-as route authorization only. The trust registry should store non-secret ids,
-labels, timestamps, and revocation state. Native clients can keep device secrets
-in OS storage such as Keychain later, but the broker-owned registry remains the
-local source of trusted records.
+The first local trust persistence checkpoint is broker-mediated and file-backed:
+keep trusted host/device/operator records in a separate local trust registry such
+as `.code-everywhere/trust.json`, while leaving broker auth tokens as route
+authorization only. The trust registry stores non-secret ids, labels,
+timestamps, and revocation state. Native clients can keep device secrets in OS
+storage such as Keychain later, but the broker-owned registry remains the local
+source of trusted records.
 
 Before LAN, hosted relay, or Apple notification work, the missing durable fields
 to add are:
 
-- Every Code overlay publication of a stable host identifier separate from
-  human-readable `hostLabel`
 - an operator/account identifier for clients that can enqueue commands
 - a device identifier for native clients and notification routing
 
@@ -131,6 +132,8 @@ Every Code adapter that consumes them:
   from `@code-everywhere/server/http-client`
 - adapter code should publish session events with the typed `postCockpitEvents`
   helper exported from the same module
+- `/snapshot` returns projected sessions with `trust.status`; route auth tokens
+  authorize broker access but never mark a session trusted
 - web clients pass broker auth with `VITE_COCKPIT_AUTH_TOKEN` when the broker is
   started with a token
 

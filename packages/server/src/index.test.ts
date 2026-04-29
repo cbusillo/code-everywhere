@@ -9,6 +9,7 @@ import type {
 } from "@code-everywhere/contracts"
 
 import { createCockpitCommandStore, createCockpitEventStore } from "./index"
+import { createLocalTrustRegistryStore } from "./trust"
 
 const baseSession: EveryCodeSession = {
     sessionId: "session-1",
@@ -86,6 +87,49 @@ describe("cockpit event store", () => {
         expect(snapshot.sessions[0]?.status).toBe("waiting-for-approval")
         expect(snapshot.attentionSessionIds).toEqual(["session-1"])
         expect(snapshot.state.pendingApprovals["approval-1"]).toEqual(baseApproval)
+    })
+
+    it("derives session trust from current local host trust records", () => {
+        const trustStore = createLocalTrustRegistryStore()
+        const store = createCockpitEventStore(
+            [
+                {
+                    kind: "session_hello",
+                    session: {
+                        ...baseSession,
+                        hostId: "host-workhorse",
+                    },
+                },
+            ],
+            { trustStore },
+        )
+
+        expect(store.getSnapshot().sessions[0]?.trust).toMatchObject({
+            status: "unknown",
+            hostId: "host-workhorse",
+            trustedHostLabel: null,
+        })
+
+        trustStore.upsertHost({
+            hostId: "host-workhorse",
+            label: "Workhorse Mac",
+            createdAt: "2026-04-27T16:00:00.000Z",
+            lastSeenAt: "2026-04-27T16:10:00.000Z",
+            status: "trusted",
+        })
+
+        expect(store.getSnapshot().sessions[0]?.trust).toEqual({
+            status: "trusted",
+            hostId: "host-workhorse",
+            hostLabel: "workhorse-mac",
+            trustedHostLabel: "Workhorse Mac",
+            lastSeenAt: "2026-04-27T16:10:00.000Z",
+        })
+
+        trustStore.revokeHost("host-workhorse", "2026-04-27T16:20:00.000Z")
+
+        expect(store.getSnapshot().sessions[0]?.trust.status).toBe("revoked")
+        expect(store.getSnapshot().sessions[0]?.trust.lastSeenAt).toBe("2026-04-27T16:20:00.000Z")
     })
 
     it("keeps stale epoch evidence in the snapshot", () => {

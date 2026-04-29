@@ -8,15 +8,19 @@ import type {
     RequestedInput,
     SessionCommand,
     SessionId,
+    SessionTrust,
     SessionTurn,
     StaleCockpitEvent,
 } from "@code-everywhere/contracts"
 import {
+    createDefaultSessionTrust,
     createEmptyCockpitState,
     getAttentionSessionIds,
     getProjectedSessions,
     projectCockpitEvent,
 } from "@code-everywhere/contracts"
+
+import type { LocalTrustRegistrySnapshot, LocalTrustRegistryStore } from "./trust.js"
 
 export type CockpitIngestionSnapshot = {
     eventCount: number
@@ -31,6 +35,10 @@ export type CockpitEventStore = {
     getSnapshot: () => CockpitIngestionSnapshot
     getEvents: () => CockpitProjectionEvent[]
     reset: (events?: CockpitProjectionEvent[]) => CockpitIngestionSnapshot
+}
+
+export type CockpitEventStoreOptions = {
+    trustStore?: LocalTrustRegistryStore
 }
 
 export type CockpitCommandRecord = {
@@ -69,11 +77,14 @@ export type CockpitCommandStoreOptions = {
     initialRecords?: CockpitCommandRecord[]
 }
 
-export const createCockpitEventStore = (initialEvents: CockpitProjectionEvent[] = []): CockpitEventStore => {
+export const createCockpitEventStore = (
+    initialEvents: CockpitProjectionEvent[] = [],
+    options: CockpitEventStoreOptions = {},
+): CockpitEventStore => {
     let events: CockpitProjectionEvent[] = []
     let state = createEmptyCockpitState()
 
-    const getSnapshot = (): CockpitIngestionSnapshot => createSnapshot(state, events.length)
+    const getSnapshot = (): CockpitIngestionSnapshot => createSnapshot(state, events.length, options.trustStore?.getSnapshot())
 
     const ingest = (event: CockpitProjectionEvent): CockpitIngestionSnapshot => {
         const eventCopy = cloneEvent(event)
@@ -185,14 +196,57 @@ export const createCockpitCommandStore = (
     return store
 }
 
-const createSnapshot = (state: CockpitProjectionState, eventCount: number): CockpitIngestionSnapshot => {
-    const clonedState = cloneProjectionState(state)
+const createSnapshot = (
+    state: CockpitProjectionState,
+    eventCount: number,
+    trustSnapshot?: LocalTrustRegistrySnapshot,
+): CockpitIngestionSnapshot => {
+    const clonedState = annotateProjectionStateTrust(cloneProjectionState(state), trustSnapshot)
 
     return {
         eventCount,
         state: clonedState,
         sessions: getProjectedSessions(clonedState).map(cloneProjectedSession),
         attentionSessionIds: getAttentionSessionIds(clonedState),
+    }
+}
+
+const annotateProjectionStateTrust = (
+    state: CockpitProjectionState,
+    trustSnapshot: LocalTrustRegistrySnapshot | undefined,
+): CockpitProjectionState => ({
+    ...state,
+    sessions: Object.fromEntries(
+        Object.entries(state.sessions).map(([sessionId, session]) => [
+            sessionId,
+            {
+                ...session,
+                trust: resolveSessionTrust(session, trustSnapshot),
+            },
+        ]),
+    ),
+})
+
+export const resolveSessionTrust = (
+    session: Pick<ProjectedCockpitSession, "hostId" | "hostLabel">,
+    trustSnapshot: LocalTrustRegistrySnapshot | undefined,
+): SessionTrust => {
+    const defaultTrust = createDefaultSessionTrust(session)
+    if (defaultTrust.hostId === null) {
+        return defaultTrust
+    }
+
+    const hostRecord = trustSnapshot?.hosts.find((host) => host.hostId === defaultTrust.hostId)
+    if (hostRecord === undefined) {
+        return defaultTrust
+    }
+
+    return {
+        status: hostRecord.status,
+        hostId: hostRecord.hostId,
+        hostLabel: session.hostLabel,
+        trustedHostLabel: hostRecord.label,
+        lastSeenAt: hostRecord.lastSeenAt,
     }
 }
 
@@ -255,6 +309,7 @@ const cloneRecord = <Value>(record: Record<string, Value>, cloneValue: (value: V
 
 const cloneProjectedSession = (session: ProjectedCockpitSession): ProjectedCockpitSession => ({
     ...session,
+    trust: { ...session.trust },
     pendingApprovalIds: [...session.pendingApprovalIds],
     pendingInputIds: [...session.pendingInputIds],
     turnIds: [...session.turnIds],
