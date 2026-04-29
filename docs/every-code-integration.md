@@ -81,6 +81,26 @@ pending work change. Claimed commands should progress from queued to delivered
 to accepted or rejected in the cockpit so operators can tell whether the local
 session actually handled them.
 
+## Operator Cockpit States
+
+The web cockpit is a structured operator surface rather than a terminal stream.
+It should keep the next action visible and make transport health explicit:
+
+- The top `Next action` strip is derived from live projection state: pending
+  approvals, actionable requested input, blocked/error sessions, stale command
+  outcomes, and rejected command outcomes.
+- Attention items for approvals and requested input keep their pending item id,
+  so selecting the strip targets the exact approval/input when a session has
+  more than one pending item.
+- Requested-input records without questions are not actionable and are excluded
+  from the attention queue and active pending-work card.
+- A compact state banner explains fixture mode, first live connection, broker
+  fallback/reconnect, healthy-but-empty live broker snapshots, and retained
+  stale-event evidence.
+- Stale epoch evidence from `state.staleEvents` is carried into the web fixture
+  model so the cockpit can surface stale projection events as operator context,
+  not only rejected stale commands.
+
 ## Local Smoke Loop
 
 For a quick broker/projection check without launching a TUI, run:
@@ -100,10 +120,12 @@ pnpm smoke:cockpit:web
 ```
 
 That smoke starts an in-memory local broker and Vite web cockpit, points the web
-app at the broker with `VITE_COCKPIT_HTTP_URL`, verifies a live session in a
-real browser, enqueues a status command from the cockpit, stops the broker to
-confirm HTTP fallback, then restarts the broker and verifies live recovery. It
-requires the local `ui-browser` helper.
+app at the broker with `VITE_COCKPIT_HTTP_URL`, first verifies the healthy
+no-live-session state, publishes a live session plus stale-epoch evidence,
+verifies the cockpit state banner and live session in a real browser, enqueues
+status/pause/continue commands from the cockpit, stops the broker to confirm
+HTTP fallback, then restarts the broker and verifies live recovery. It requires
+the local `ui-browser` helper.
 
 To verify retained/pruned broker state in the browser, run:
 
