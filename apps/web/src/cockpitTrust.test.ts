@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest"
 
 import { cockpitFixture } from "./cockpitData"
-import { canManageTrust, createTrustUrl, postRevokedHost, postTrustedHost } from "./cockpitTrust"
+import {
+    canManageTrust,
+    createTrustUrl,
+    fetchLocalTrustRegistry,
+    postRevokedHost,
+    postRevokedHostId,
+    postTrustedHost,
+} from "./cockpitTrust"
 
 describe("cockpit trust client", () => {
     const session = getFixtureSession()
@@ -83,6 +90,31 @@ describe("cockpit trust client", () => {
         })
     })
 
+    it("fetches and revokes known host records by host id", async () => {
+        const requests: { url: string; init: RequestInit | undefined }[] = []
+        const fetchImpl: Parameters<typeof fetchLocalTrustRegistry>[1] = (input, init) => {
+            requests.push({ url: toRequestUrl(input), init })
+            return Promise.resolve(new Response(JSON.stringify(trustSnapshot), { status: 200 }))
+        }
+
+        await expect(fetchLocalTrustRegistry("http://127.0.0.1:4789", fetchImpl)).resolves.toMatchObject({
+            hosts: [{ hostId: session.hostId, status: "trusted" }],
+        })
+        await expect(postRevokedHostId("http://127.0.0.1:4789", " host-alpha ", now, fetchImpl)).resolves.toMatchObject({
+            hosts: [{ hostId: session.hostId, status: "trusted" }],
+        })
+        await expect(postRevokedHostId("http://127.0.0.1:4789", " ", now, fetchImpl)).rejects.toThrow("Host id is required")
+
+        expect(requests.map((request) => request.url)).toEqual([
+            "http://127.0.0.1:4789/trust",
+            "http://127.0.0.1:4789/trust/hosts/revoke",
+        ])
+        expect(requests[1]?.init).toMatchObject({
+            method: "POST",
+            body: JSON.stringify({ hostId: "host-alpha", revokedAt: "2026-04-29T19:50:00.000Z" }),
+        })
+    })
+
     it("rejects missing host ids and malformed responses", async () => {
         const missingHostSession = { ...session }
         delete missingHostSession.hostId
@@ -97,6 +129,12 @@ describe("cockpit trust client", () => {
             "Cockpit trust request failed with 400",
         )
         await expect(postTrustedHost("http://127.0.0.1:4789", session, now, malformedFetch)).rejects.toThrow(
+            "Cockpit trust response did not match the expected shape",
+        )
+        await expect(fetchLocalTrustRegistry("http://127.0.0.1:4789", failingFetch)).rejects.toThrow(
+            "Cockpit trust request failed with 400",
+        )
+        await expect(fetchLocalTrustRegistry("http://127.0.0.1:4789", malformedFetch)).rejects.toThrow(
             "Cockpit trust response did not match the expected shape",
         )
     })

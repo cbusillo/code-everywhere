@@ -8,6 +8,7 @@ import type {
     TurnStatus,
     TurnStep,
 } from "@code-everywhere/contracts"
+import type { LocalHostTrustRecord, LocalTrustRegistrySnapshot } from "@code-everywhere/server/trust"
 import {
     AlertCircle,
     Bell,
@@ -33,7 +34,7 @@ import {
     TerminalSquare,
     X,
 } from "lucide-react"
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 import { canPostCockpitCommand, postCockpitCommand } from "./cockpitCommands"
 import {
@@ -64,7 +65,7 @@ import {
     type DraftMap,
 } from "./cockpitDrafts"
 import { describeTransportStatus, useCockpitView, type CockpitTransportStatus } from "./cockpitTransport"
-import { canManageTrust, postRevokedHost, postTrustedHost } from "./cockpitTrust"
+import { canManageTrust, fetchLocalTrustRegistry, postRevokedHost, postRevokedHostId, postTrustedHost } from "./cockpitTrust"
 
 const selectedSessionId = "ce-alpha"
 
@@ -74,6 +75,12 @@ type CockpitStateSurface = {
     tone: "info" | "warning" | "success"
     title: string
     detail: string
+}
+
+type TrustRegistryState = {
+    snapshot: LocalTrustRegistrySnapshot | null
+    status: "unavailable" | "loading" | "ready" | "error"
+    message: string
 }
 
 const statusIcon: Record<SessionStatus, IconComponent> = {
@@ -183,6 +190,11 @@ export const App = () => {
     const [inputAnswerDrafts, setInputAnswerDrafts] = useState<DraftMap>({})
     const [commandLog, setCommandLog] = useState("No command sent yet")
     const [trustLog, setTrustLog] = useState("No trust action sent yet")
+    const [trustRegistry, setTrustRegistry] = useState<TrustRegistryState>({
+        snapshot: null,
+        status: "unavailable",
+        message: "Connect to a live broker to review local trust records.",
+    })
     const fallbackSession = cockpit.sessions[0]
     const activeSession =
         fallbackSession === undefined
@@ -205,6 +217,49 @@ export const App = () => {
     const reply = getDraftValue(replyDrafts, activeSession?.sessionId)
     const inputAnswerValues = getRequestedInputAnswerValues(inputAnswerDrafts, activeInput)
     const inputNote = getRequestedInputNoteValue(inputAnswerDrafts, activeInput)
+
+    useEffect(() => {
+        if (!canManageTrust(cockpitView.transport)) {
+            setTrustRegistry((current) => ({
+                snapshot: current.snapshot,
+                status: "unavailable",
+                message:
+                    current.snapshot === null
+                        ? "Connect to a live broker to review local trust records."
+                        : "Showing last loaded trust records while the broker is unavailable.",
+            }))
+            return undefined
+        }
+
+        let isActive = true
+        const transportUrl = cockpitView.transport.url
+        setTrustRegistry((current) => ({
+            snapshot: current.snapshot,
+            status: current.snapshot === null ? "loading" : "ready",
+            message: current.snapshot === null ? "Loading local trust records..." : "Local trust records loaded.",
+        }))
+        void fetchLocalTrustRegistry(transportUrl)
+            .then((snapshot) => {
+                if (!isActive) {
+                    return
+                }
+                setTrustRegistry({ snapshot, status: "ready", message: "Local trust records loaded." })
+            })
+            .catch((error: unknown) => {
+                if (!isActive) {
+                    return
+                }
+                setTrustRegistry((current) => ({
+                    snapshot: current.snapshot,
+                    status: "error",
+                    message: error instanceof Error ? error.message : "Unable to load local trust records.",
+                }))
+            })
+
+        return () => {
+            isActive = false
+        }
+    }, [cockpitView.transport])
 
     const setReply = (value: string) => {
         if (activeSession === undefined) {
@@ -263,10 +318,29 @@ export const App = () => {
                     session.hostId === undefined
                         ? undefined
                         : snapshot.hosts.find((candidate) => candidate.hostId === session.hostId)
+                setTrustRegistry({ snapshot, status: "ready", message: "Local trust records loaded." })
                 setTrustLog(`${label} saved for ${session.hostLabel}; ${host?.status ?? "host record updated"}`)
             })
             .catch((error: unknown) => {
                 setTrustLog(`${label} failed: ${error instanceof Error ? error.message : "Unable to update trust"}`)
+            })
+    }
+
+    const dispatchTrustHostRevoke = (host: LocalHostTrustRecord) => {
+        if (!canManageTrust(cockpitView.transport)) {
+            setTrustLog(`Revoke host requires a live HTTP broker`)
+            return
+        }
+
+        setTrustLog(`Sending revoke for ${host.label}`)
+        void postRevokedHostId(cockpitView.transport.url, host.hostId)
+            .then((snapshot) => {
+                const updatedHost = snapshot.hosts.find((candidate) => candidate.hostId === host.hostId)
+                setTrustRegistry({ snapshot, status: "ready", message: "Local trust records loaded." })
+                setTrustLog(`Revoke host saved for ${host.label}; ${updatedHost?.status ?? "host record updated"}`)
+            })
+            .catch((error: unknown) => {
+                setTrustLog(`Revoke host failed: ${error instanceof Error ? error.message : "Unable to update trust"}`)
             })
     }
 
@@ -338,6 +412,8 @@ export const App = () => {
                                 commandOutcomeSummary={activeCommandOutcomeSummary}
                                 dispatchCommand={dispatchCommand}
                                 dispatchTrustAction={dispatchTrustAction}
+                                dispatchTrustHostRevoke={dispatchTrustHostRevoke}
+                                trustRegistry={trustRegistry}
                                 transport={cockpitView.transport}
                             />
                         </>
@@ -669,6 +745,8 @@ type ActionRailProps = {
     commandOutcomeSummary: CommandOutcomeSummary
     dispatchCommand: (label: string, command: SessionCommand) => void
     dispatchTrustAction: (label: string, session: CockpitSession, action: "trust" | "revoke") => void
+    dispatchTrustHostRevoke: (host: LocalHostTrustRecord) => void
+    trustRegistry: TrustRegistryState
     transport: CockpitTransportStatus
 }
 
@@ -686,6 +764,8 @@ const ActionRail = ({
     commandOutcomeSummary,
     dispatchCommand,
     dispatchTrustAction,
+    dispatchTrustHostRevoke,
+    trustRegistry,
     transport,
 }: ActionRailProps) => (
     <aside className="action-rail" aria-label="Pending work and actions">
@@ -723,6 +803,8 @@ const ActionRail = ({
             transport={transport}
             trustLog={trustLog}
             dispatchTrustAction={dispatchTrustAction}
+            dispatchTrustHostRevoke={dispatchTrustHostRevoke}
+            trustRegistry={trustRegistry}
         />
 
         <section className="panel work-panel">
@@ -769,11 +851,15 @@ const TrustManagementPanel = ({
     transport,
     trustLog,
     dispatchTrustAction,
+    dispatchTrustHostRevoke,
+    trustRegistry,
 }: {
     session: CockpitSession
     transport: CockpitTransportStatus
     trustLog: string
     dispatchTrustAction: (label: string, session: CockpitSession, action: "trust" | "revoke") => void
+    dispatchTrustHostRevoke: (host: LocalHostTrustRecord) => void
+    trustRegistry: TrustRegistryState
 }) => {
     const hostId = session.hostId?.trim()
     const hasHostId = hostId !== undefined && hostId !== ""
@@ -820,10 +906,86 @@ const TrustManagementPanel = ({
                     <span>Trust status</span>
                     <p>{trustLog}</p>
                 </div>
+                <TrustRegistryList
+                    registry={trustRegistry}
+                    isLive={isLive}
+                    activeHostId={hostId}
+                    onRevokeHost={dispatchTrustHostRevoke}
+                />
             </div>
         </section>
     )
 }
+
+const TrustRegistryList = ({
+    registry,
+    isLive,
+    activeHostId,
+    onRevokeHost,
+}: {
+    registry: TrustRegistryState
+    isLive: boolean
+    activeHostId: string | undefined
+    onRevokeHost: (host: LocalHostTrustRecord) => void
+}) => {
+    const hosts = registry.snapshot?.hosts ?? []
+    const sortedHosts = [...hosts].sort(compareTrustHosts)
+
+    return (
+        <div className="trust-registry" aria-label="Known host trust records">
+            <div className="trust-registry-heading">
+                <span>Known hosts</span>
+                <strong>{hosts.length}</strong>
+            </div>
+            {sortedHosts.length === 0 ? (
+                <p className="trust-registry-empty">{registry.message}</p>
+            ) : (
+                <div className="trust-record-list">
+                    {sortedHosts.map((host) => (
+                        <TrustRegistryRow
+                            key={host.hostId}
+                            host={host}
+                            isActiveHost={activeHostId === host.hostId}
+                            canRevoke={isLive && host.status === "trusted"}
+                            onRevokeHost={onRevokeHost}
+                        />
+                    ))}
+                </div>
+            )}
+        </div>
+    )
+}
+
+const TrustRegistryRow = ({
+    host,
+    isActiveHost,
+    canRevoke,
+    onRevokeHost,
+}: {
+    host: LocalHostTrustRecord
+    isActiveHost: boolean
+    canRevoke: boolean
+    onRevokeHost: (host: LocalHostTrustRecord) => void
+}) => (
+    <div className={`trust-record-row is-${host.status} ${isActiveHost ? "is-active-host" : ""}`}>
+        <div>
+            <strong>{host.label}</strong>
+            <p>{host.hostId}</p>
+            <small>{formatTrustRecordTime(host)}</small>
+        </div>
+        <span className={`trust-record-status is-${host.status}`}>{host.status}</span>
+        <button
+            className="icon-button danger"
+            type="button"
+            disabled={!canRevoke}
+            title={`Revoke ${host.label}`}
+            aria-label={`Revoke ${host.label}`}
+            onClick={() => onRevokeHost(host)}
+        >
+            <ShieldAlert size={14} />
+        </button>
+    </div>
+)
 
 const ApprovalCard = ({
     approval,
@@ -1227,3 +1389,19 @@ const formatTime = (iso: string): string =>
         hour: "numeric",
         minute: "2-digit",
     }).format(new Date(iso))
+
+const compareTrustHosts = (left: LocalHostTrustRecord, right: LocalHostTrustRecord): number => {
+    if (left.status !== right.status) {
+        return left.status === "trusted" ? -1 : 1
+    }
+
+    return getTrustRecordTimestamp(right) - getTrustRecordTimestamp(left)
+}
+
+const formatTrustRecordTime = (host: LocalHostTrustRecord): string => {
+    const timestamp = host.lastSeenAt ?? host.createdAt
+    const label = host.lastSeenAt === null ? "Created" : "Last seen"
+    return `${label} ${formatTime(timestamp)}`
+}
+
+const getTrustRecordTimestamp = (host: LocalHostTrustRecord): number => new Date(host.lastSeenAt ?? host.createdAt).getTime()
