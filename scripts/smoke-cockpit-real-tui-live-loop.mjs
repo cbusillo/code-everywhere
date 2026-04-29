@@ -77,6 +77,12 @@ const run = async () => {
             sessionId: tuiSession.sessionId,
         })
 
+        await sendReply(uiBrowser, session, "Real TUI reply smoke: acknowledge this control message only.")
+        const replyOutcome = await waitForCommandOutcome(brokerUrl, "reply")
+        assertEqual(replyOutcome.status, "accepted", "reply command outcome")
+        assertEqual(replyOutcome.sessionId, tuiSession.sessionId, "reply command session")
+        assertEqual(replyOutcome.sessionEpoch, tuiSession.sessionEpoch, "reply command epoch")
+
         stdout.write(
             `Cockpit real TUI live-loop smoke passed at ${webUrl} using broker ${brokerUrl} and session ${tuiSession.sessionId}\n`,
         )
@@ -297,6 +303,13 @@ const clickFirstCommandButton = async (uiBrowser, session, label) => {
     await ui(uiBrowser, session, [
         "eval",
         `(() => { const label = ${JSON.stringify(label)}; const button = Array.from(document.querySelectorAll('button')).find((candidate) => candidate.innerText.trim() === label); if (!button) throw new Error(label + ' button not found'); button.click(); return true; })()`,
+    ])
+}
+
+const sendReply = async (uiBrowser, session, message) => {
+    await ui(uiBrowser, session, [
+        "eval",
+        `(() => { const textarea = document.querySelector('#session-reply'); if (!textarea) throw new Error('Reply textarea not found'); const value = ${JSON.stringify(message)}; const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set; setter.call(textarea, value); textarea.dispatchEvent(new Event('input', { bubbles: true })); const button = Array.from(document.querySelectorAll('button')).find((candidate) => candidate.innerText.trim() === 'Send'); if (!button) throw new Error('Send button not found'); button.click(); return true; })()`,
     ])
 }
 
