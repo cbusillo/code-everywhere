@@ -43,6 +43,9 @@ const run = async () => {
             detail: "Broker/web smoke step complete.",
         })
 
+        await clickFirstCommandButton(uiBrowser, session, "Trust")
+        await waitForTrustedHost(brokerUrl, "smoke-host")
+
         await clickFirstCommandButton(uiBrowser, session, "Status")
         await waitForCommand(brokerUrl, "status_request")
         await clickFirstCommandButton(uiBrowser, session, "Pause")
@@ -288,6 +291,19 @@ const waitForCommand = async (brokerUrl, commandKind) => {
     throw new Error(`Timed out waiting for ${commandKind} command`)
 }
 
+const waitForTrustedHost = async (brokerUrl, hostId) => {
+    const startedAt = Date.now()
+    while (Date.now() - startedAt < 10000) {
+        const snapshot = await getJson(`${brokerUrl}/trust`)
+        if (snapshot.hosts.some((host) => host.hostId === hostId && host.status === "trusted")) {
+            return
+        }
+        await delay(100)
+    }
+
+    throw new Error(`Timed out waiting for trusted host ${hostId}`)
+}
+
 const runCommand = async (command, args) =>
     new Promise((resolve, reject) => {
         const child = spawn(command, args, {
@@ -319,6 +335,7 @@ const createLiveLoopEvents = (summary) => [
         session: {
             sessionId: "smoke-live-session",
             sessionEpoch: "smoke-live-epoch",
+            hostId: "smoke-host",
             hostLabel: "Smoke Host",
             cwd: "/tmp/code-everywhere-web-smoke",
             branch: "main",

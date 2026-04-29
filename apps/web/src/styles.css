@@ -913,6 +913,7 @@ input:focus {
 .work-panel > .panel-heading,
 .work-panel > .command-grid,
 .mock-log,
+.trust-card,
 .epoch-note,
 .empty-state,
 .decision-card {
@@ -927,6 +928,55 @@ input:focus {
 
 .priority-panel .panel-heading h2 {
     color: var(--fg-1);
+}
+
+.trust-card {
+    display: grid;
+    gap: 10px;
+    margin-top: 10px;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    background: var(--bg-elevated);
+    padding: 12px;
+}
+
+.trust-card > div:first-child {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+}
+
+.trust-card > div:first-child > span {
+    color: var(--fg-3);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.trust-card strong,
+.trust-card p {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.trust-card strong {
+    color: var(--fg-1);
+    font-size: 13px;
+}
+
+.trust-card p {
+    margin: 0;
+    color: var(--fg-3);
+    font-family: var(--font-mono);
+    font-size: 11px;
+}
+
+.trust-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
 }
 
 .decision-card {
@@ -1307,6 +1357,13 @@ legend {
 .icon-button:hover {
     background: var(--surface-hover);
     color: var(--fg-1);
+}
+
+.primary-button:disabled,
+.quiet-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.48;
+    filter: none;
 }
 
 .primary-button:focus,
