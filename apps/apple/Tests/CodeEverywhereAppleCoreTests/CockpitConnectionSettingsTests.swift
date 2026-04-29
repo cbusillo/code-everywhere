@@ -11,8 +11,8 @@ struct CockpitConnectionSettingsTests {
         let secrets = InMemorySecretStore()
         let store = CockpitConnectionSettingsStore(defaults: defaults, secrets: secrets, namespace: "test")
         let settings = CockpitConnectionSettings(
-            cockpitURL: try #require(URL(string: "http://127.0.0.1:5173")),
-            brokerURL: try #require(URL(string: "http://127.0.0.1:4789")),
+            cockpitURL: URL(string: "http://127.0.0.1:5173")!,
+            brokerURL: URL(string: "http://127.0.0.1:4789")!,
             brokerAuthToken: " token-value "
         )
 
@@ -22,8 +22,8 @@ struct CockpitConnectionSettingsTests {
         #expect(defaults.string(forKey: "test.brokerURL") == "http://127.0.0.1:4789")
         #expect(defaults.string(forKey: "test.brokerAuthToken") == nil)
         #expect(try store.load() == CockpitConnectionSettings(
-            cockpitURL: try #require(URL(string: "http://127.0.0.1:5173")),
-            brokerURL: try #require(URL(string: "http://127.0.0.1:4789")),
+            cockpitURL: URL(string: "http://127.0.0.1:5173")!,
+            brokerURL: URL(string: "http://127.0.0.1:4789")!,
             brokerAuthToken: "token-value"
         ))
     }
@@ -32,7 +32,10 @@ struct CockpitConnectionSettingsTests {
     func clearsConnectionSettings() throws {
         let defaults = makeDefaults()
         let store = CockpitConnectionSettingsStore(defaults: defaults, secrets: InMemorySecretStore(), namespace: "clear")
-        try store.save(CockpitConnectionSettings(cockpitURL: try #require(URL(string: "http://127.0.0.1:5173")), brokerAuthToken: "secret"))
+        try store.save(CockpitConnectionSettings(
+            cockpitURL: URL(string: "http://127.0.0.1:5173")!,
+            brokerAuthToken: "secret"
+        ))
 
         try store.clear()
 

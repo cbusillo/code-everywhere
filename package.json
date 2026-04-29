@@ -6,7 +6,9 @@
     "description": "A structured Apple-first control surface for Every Code sessions.",
     "packageManager": "pnpm@10.10.0",
     "scripts": {
+        "apple:app:build": "pnpm apple:generate && xcodebuild -project apps/apple/CodeEverywhereApple.xcodeproj -scheme CodeEverywhere -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build",
         "apple:build": "swift build --package-path apps/apple",
+        "apple:generate": "xcodegen generate --spec apps/apple/project.yml",
         "apple:test": "swift test --package-path apps/apple",
         "cockpit:server": "pnpm --filter @code-everywhere/server start",
         "format": "prettier --write .",

@@ -30,8 +30,21 @@ jobs:
             - name: Checkout
               uses: actions/checkout@v4
 
+            - name: Install XcodeGen
+              run: brew install xcodegen
+
             - name: Swift build
               run: swift build --package-path apps/apple
 
             - name: Swift test
               run: swift test --package-path apps/apple
+
+            - name: iOS app build
+              run: |
+                  xcodegen generate --spec apps/apple/project.yml
+                  xcodebuild \
+                      -project apps/apple/CodeEverywhereApple.xcodeproj \
+                      -scheme CodeEverywhere \
+                      -destination 'generic/platform=iOS Simulator' \
+                      CODE_SIGNING_ALLOWED=NO \
+                      build

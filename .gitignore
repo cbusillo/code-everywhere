@@ -6,6 +6,7 @@ coverage/
 .vite/
 .build/
 .swiftpm/
+apps/apple/CodeEverywhereApple.xcodeproj/
 .code/
 .code-everywhere/
 .env
