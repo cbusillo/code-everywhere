@@ -6,6 +6,8 @@
     "description": "A structured Apple-first control surface for Every Code sessions.",
     "packageManager": "pnpm@10.10.0",
     "scripts": {
+        "apple:build": "swift build --package-path apps/apple",
+        "apple:test": "swift test --package-path apps/apple",
         "cockpit:server": "pnpm --filter @code-everywhere/server start",
         "format": "prettier --write .",
         "format:check": "prettier --check .",

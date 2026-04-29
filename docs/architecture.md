@@ -96,6 +96,11 @@ and platform shell behavior. The React cockpit remains the source for session
 presentation and operator workflows until native-only screens have a specific
 reason to exist.
 
+The first scaffold lives in `apps/apple` as a Swift package. It is not a signed
+Xcode app target yet; it establishes the shared cockpit web-view shell,
+connection settings, Keychain-backed token storage, and deep-link parsing that a
+future app target can consume.
+
 ## Protocol Principles
 
 - Use explicit event types and command types.

@@ -4,6 +4,9 @@ dist/
 coverage/
 .turbo/
 .vite/
+.build/
+.swiftpm/
+.code/
 .code-everywhere/
 .env
 .env.*
