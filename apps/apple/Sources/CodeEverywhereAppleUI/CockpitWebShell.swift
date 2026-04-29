@@ -12,8 +12,12 @@ public struct CockpitWebShell: View {
     }
 
     public var body: some View {
-        CockpitWebView(url: shellURL)
-            .navigationTitle("Code Everywhere")
+        VStack(spacing: 0) {
+            AppleDeviceTrustRegistrationPanel(settings: settings)
+            Divider()
+            CockpitWebView(url: shellURL)
+        }
+        .navigationTitle("Code Everywhere")
     }
 
     private var shellURL: URL {

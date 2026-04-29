@@ -114,8 +114,10 @@ remain separate platform work.
 Device identity starts as a local Apple core record, also before APNs delivery.
 It stores non-secret install metadata in user defaults and reserves Keychain or
 another `SecretStore` implementation for future device-held credentials. The
-broker trust registry can later reference that device id when host, operator,
-and device trust become linked product state.
+Apple shell can register or revoke that local identity against the broker trust
+API using the stored broker URL and auth token; trust records still contain only
+device ids, labels, platform, timestamps, and trust status. APNs tokens and
+device-held secrets remain outside the trust registry.
 
 ## Protocol Principles
 
