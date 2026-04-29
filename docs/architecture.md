@@ -110,6 +110,12 @@ round-trips through the same session and pending-item parser used by the app
 shell. APNs registration, device-token upload, and notification permission UX
 remain separate platform work.
 
+Device identity starts as a local Apple core record, also before APNs delivery.
+It stores non-secret install metadata in user defaults and reserves Keychain or
+another `SecretStore` implementation for future device-held credentials. The
+broker trust registry can later reference that device id when host, operator,
+and device trust become linked product state.
+
 ## Protocol Principles
 
 - Use explicit event types and command types.
