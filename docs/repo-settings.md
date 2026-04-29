@@ -29,6 +29,7 @@ The repo starts with validation CI only:
 - tests
 - CodeQL
 - Apple Swift package build/test for `apps/apple`
+- Apple generated iOS/iPadOS app target build for the simulator
 
 CD is intentionally deferred until the first deploy target is clear. Likely future targets:
 

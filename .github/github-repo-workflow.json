@@ -29,6 +29,7 @@
             "default": "pnpm typecheck"
         },
         "build": {
+            "apple": "pnpm apple:build && pnpm apple:test && pnpm apple:app:build",
             "validate": "pnpm validate",
             "web": "pnpm --filter @code-everywhere/web build",
             "server": "pnpm --filter @code-everywhere/server build",

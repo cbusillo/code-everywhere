@@ -26,9 +26,9 @@ Workspace packages:
   projection, and local HTTP transport boundary.
 - `apps/web`: React/Vite cockpit UI for projected fake data or local HTTP
   snapshots and command dispatch.
-- `apps/apple`: Swift package scaffold for the native Apple wrapper around the
-  shared cockpit, including connection settings, deep-link parsing, Keychain
-  token storage, and a SwiftUI/WebKit shell.
+- `apps/apple`: native Apple wrapper around the shared cockpit, including a
+  Swift package for connection settings, deep-link parsing, Keychain token
+  storage, a SwiftUI/WebKit shell, and a generated iOS/iPadOS app target.
 
 Useful entry points:
 
@@ -62,17 +62,21 @@ The local server binds to `127.0.0.1:4789` by default. Override it with
 `CODE_EVERYWHERE_HOST`, `CODE_EVERYWHERE_PORT`, `--host`, or `--port` when a
 different local endpoint is needed.
 
-The Apple wrapper scaffold is a Swift package, not a signed app target yet. Use
-the local Swift toolchain to build or test its native support code:
+The Apple wrapper keeps generated Xcode project files out of source control.
+Use XcodeGen when you need the local project, and use the Swift toolchain for
+native support code:
 
 ```sh
+pnpm apple:generate
 pnpm apple:build
 pnpm apple:test
+pnpm apple:app:build
 ```
 
-The scaffold hosts the shared cockpit in a native web view and keeps native code
-focused on platform boundaries: Keychain-backed broker tokens, future device
-identity, and deep-link routing into session or pending-work state.
+The iOS/iPadOS app target builds for the simulator with signing disabled. It
+hosts the shared cockpit in a native web view and keeps native code focused on
+platform boundaries: Keychain-backed broker tokens, future device identity, and
+deep-link routing into session or pending-work state.
 
 ## References
 
