@@ -39,7 +39,16 @@ public final class KeychainSecretStore: SecretStore, @unchecked Sendable {
     }
 
     public func saveSecret(_ secret: String, account: String) throws {
-        try deleteSecret(account: account)
+        let updateStatus = SecItemUpdate(
+            baseQuery(account: account) as CFDictionary,
+            [kSecValueData as String: Data(secret.utf8)] as CFDictionary,
+        )
+        if updateStatus == errSecSuccess {
+            return
+        }
+        guard updateStatus == errSecItemNotFound else {
+            throw SecretStoreError.keychainStatus(updateStatus)
+        }
 
         var query = baseQuery(account: account)
         query[kSecValueData as String] = Data(secret.utf8)

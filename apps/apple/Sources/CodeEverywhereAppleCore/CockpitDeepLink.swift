@@ -14,7 +14,9 @@ public struct CockpitDeepLinkParser: Sendable {
         }
 
         let pathParts = makePathParts(url: url)
-        let query = makeQueryMap(components: components)
+        guard let query = makeQueryMap(components: components) else {
+            return nil
+        }
 
         if pathParts.first == "session", let sessionId = pathParts.dropFirst().first?.nilIfBlank {
             return .session(sessionId: sessionId, pendingItemId: query["pending"]?.nilIfBlank)
@@ -46,13 +48,19 @@ public struct CockpitDeepLinkParser: Sendable {
         return parts
     }
 
-    private func makeQueryMap(components: URLComponents) -> [String: String] {
-        Dictionary(uniqueKeysWithValues: (components.queryItems ?? []).compactMap { item in
-            guard let value = item.value else {
+    private func makeQueryMap(components: URLComponents) -> [String: String]? {
+        var values: [String: String] = [:]
+        var seenNames = Set<String>()
+        for item in components.queryItems ?? [] {
+            guard seenNames.insert(item.name).inserted else {
                 return nil
             }
-            return (item.name, value)
-        })
+            guard let value = item.value else {
+                continue
+            }
+            values[item.name] = value
+        }
+        return values
     }
 
     private func makeFragment(path: [String], query: [String: String?]) -> String {
