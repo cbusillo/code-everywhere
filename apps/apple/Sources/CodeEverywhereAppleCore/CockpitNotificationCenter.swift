@@ -57,24 +57,40 @@ public struct CockpitLocalNotificationFactory: Sendable {
 
     public func pendingWorkNotification(
         pendingItemId: String,
-        sessionId: String,
+        sessionId: String?,
         title: String = "Code Everywhere needs attention",
         body: String = "A session has pending work."
     ) -> CockpitLocalNotification? {
-        guard let pendingItemId = pendingItemId.nilIfBlank,
-              let sessionId = sessionId.nilIfBlank
-        else {
+        guard let pendingItemId = pendingItemId.nilIfBlank else {
             return nil
         }
 
+        let sessionId = sessionId?.nilIfBlank
         let route = CockpitNotificationRoute.pendingItem(pendingItemId: pendingItemId, sessionId: sessionId)
         return CockpitLocalNotification(
-            id: "code-everywhere.pending.\(pendingItemId)",
+            id: Self.pendingWorkNotificationId(pendingItemId: pendingItemId, sessionId: sessionId),
             title: title,
             body: body,
             route: route,
             userInfo: router.userInfo(for: route)
         )
+    }
+
+    private static func pendingWorkNotificationId(pendingItemId: String, sessionId: String?) -> String {
+        let scopedId = [sessionId, pendingItemId]
+            .compactMap { $0 }
+            .map(notificationIdentifierComponent)
+            .joined(separator: ".")
+        return "code-everywhere.pending.\(scopedId)"
+    }
+
+    private static func notificationIdentifierComponent(_ value: String) -> String {
+        value
+            .unicodeScalars
+            .map { scalar in
+                CharacterSet.alphanumerics.contains(scalar) || scalar == "-" || scalar == "_" ? String(scalar) : "-"
+            }
+            .joined()
     }
 }
 
@@ -118,6 +134,7 @@ public struct UserNotificationScheduler: CockpitLocalNotificationScheduling, @un
 
     public func cancelNotification(id: String) {
         center.removePendingNotificationRequests(withIdentifiers: [id])
+        center.removeDeliveredNotifications(withIdentifiers: [id])
     }
 }
 

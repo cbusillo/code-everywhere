@@ -23,7 +23,7 @@ struct CockpitNotificationCenterTests {
             body: "Install dependencies?"
         ))
 
-        #expect(notification.id == "code-everywhere.pending.approval-9")
+        #expect(notification.id == "code-everywhere.pending.session-123.approval-9")
         #expect(notification.title == "Approval needed")
         #expect(notification.body == "Install dependencies?")
         #expect(notification.route == .pendingItem(pendingItemId: "approval-9", sessionId: "session-123"))
@@ -32,12 +32,37 @@ struct CockpitNotificationCenterTests {
         ])
     }
 
+    @Test("scopes pending-work notification ids by session")
+    func scopesPendingWorkNotificationIdsBySession() throws {
+        let factory = CockpitLocalNotificationFactory()
+        let first = try #require(factory.pendingWorkNotification(pendingItemId: "approval-9", sessionId: "session-123"))
+        let second = try #require(factory.pendingWorkNotification(pendingItemId: "approval-9", sessionId: "session-456"))
+
+        #expect(first.id == "code-everywhere.pending.session-123.approval-9")
+        #expect(second.id == "code-everywhere.pending.session-456.approval-9")
+        #expect(first.id != second.id)
+    }
+
+    @Test("creates sessionless pending-work notifications")
+    func createsSessionlessPendingWorkNotifications() throws {
+        let notification = try #require(CockpitLocalNotificationFactory().pendingWorkNotification(
+            pendingItemId: "approval-9",
+            sessionId: nil
+        ))
+
+        #expect(notification.id == "code-everywhere.pending.approval-9")
+        #expect(notification.route == .pendingItem(pendingItemId: "approval-9", sessionId: nil))
+        #expect(notification.userInfo == [
+            "codeEverywhere.routeURL": "code-everywhere://pending/approval-9",
+        ])
+    }
+
     @Test("rejects empty pending-work identifiers")
     func rejectsEmptyPendingWorkIdentifiers() {
         let factory = CockpitLocalNotificationFactory()
 
         #expect(factory.pendingWorkNotification(pendingItemId: " ", sessionId: "session-123") == nil)
-        #expect(factory.pendingWorkNotification(pendingItemId: "approval-9", sessionId: " ") == nil)
+        #expect(factory.pendingWorkNotification(pendingItemId: "approval-9", sessionId: " ") != nil)
     }
 
     @Test("schedules and cancels through the abstraction")
@@ -52,7 +77,7 @@ struct CockpitNotificationCenterTests {
         scheduler.cancelNotification(id: notification.id)
 
         #expect(scheduler.scheduled == [notification])
-        #expect(scheduler.cancelledIds == ["code-everywhere.pending.input-7"])
+        #expect(scheduler.cancelledIds == ["code-everywhere.pending.session-123.input-7"])
     }
 }
 
