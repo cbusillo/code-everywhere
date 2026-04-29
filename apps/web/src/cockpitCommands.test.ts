@@ -82,6 +82,71 @@ describe("cockpit command client", () => {
         })
     })
 
+    it("accepts every retained session command shape", async () => {
+        const commands: SessionCommand[] = [
+            {
+                kind: "reply",
+                sessionId: "session-1",
+                sessionEpoch: "epoch-1",
+                content: "Keep going.",
+            },
+            {
+                kind: "continue_autonomously",
+                sessionId: "session-1",
+                sessionEpoch: "epoch-1",
+            },
+            {
+                kind: "pause_current_turn",
+                sessionId: "session-1",
+                sessionEpoch: "epoch-1",
+            },
+            {
+                kind: "end_session",
+                sessionId: "session-1",
+                sessionEpoch: "epoch-1",
+            },
+            {
+                kind: "status_request",
+                sessionId: "session-1",
+                sessionEpoch: "epoch-1",
+            },
+            {
+                kind: "approval_decision",
+                sessionId: "session-1",
+                sessionEpoch: "epoch-1",
+                approvalId: "approval-1",
+                decision: "deny",
+            },
+            {
+                kind: "request_user_input_response",
+                sessionId: "session-1",
+                sessionEpoch: "epoch-1",
+                turnId: "turn-1",
+                answers: [{ questionId: "question-1", value: "timeline" }],
+            },
+        ]
+        const fetchImpl: Parameters<typeof fetchCockpitCommands>[1] = () =>
+            Promise.resolve(
+                new Response(
+                    JSON.stringify({
+                        commandCount: commands.length,
+                        commands: commands.map((retainedCommand, index) => ({
+                            id: `command-${String(index + 1)}`,
+                            receivedAt: "2026-04-27T16:20:00.000Z",
+                            deliveredAt: null,
+                            command: retainedCommand,
+                        })),
+                    }),
+                    { status: 200 },
+                ),
+            )
+
+        await expect(fetchCockpitCommands("http://127.0.0.1:4789", fetchImpl)).resolves.toMatchObject({
+            commandCount: commands.length,
+            commands: commands.map((retainedCommand) => ({ command: retainedCommand })),
+        })
+    })
+
     it("rejects failed or malformed command responses", async () => {
         const failingFetch: Parameters<typeof postCockpitCommand>[2] = () => Promise.resolve(new Response("Nope", { status: 400 }))
         const malformedFetch: Parameters<typeof postCockpitCommand>[2] = () =>

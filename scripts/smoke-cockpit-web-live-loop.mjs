@@ -35,8 +35,12 @@ const run = async () => {
             detail: "Broker/web smoke step complete.",
         })
 
-        await clickFirstStatusButton(uiBrowser, session)
+        await clickFirstCommandButton(uiBrowser, session, "Status")
         await waitForCommand(brokerUrl, "status_request")
+        await clickFirstCommandButton(uiBrowser, session, "Pause")
+        await waitForCommand(brokerUrl, "pause_current_turn")
+        await clickFirstCommandButton(uiBrowser, session, "Continue")
+        await waitForCommand(brokerUrl, "continue_autonomously")
 
         await stopProcess(broker)
         broker = null
@@ -255,10 +259,10 @@ const assertBrowserState = async (uiBrowser, session, expected) => {
     }
 }
 
-const clickFirstStatusButton = async (uiBrowser, session) => {
+const clickFirstCommandButton = async (uiBrowser, session, label) => {
     await ui(uiBrowser, session, [
         "eval",
-        "(() => { const button = Array.from(document.querySelectorAll('button')).find((candidate) => candidate.innerText.trim() === 'Status'); if (!button) throw new Error('Status button not found'); button.click(); return true; })()",
+        `(() => { const label = ${JSON.stringify(label)}; const button = Array.from(document.querySelectorAll('button')).find((candidate) => candidate.innerText.trim() === label); if (!button) throw new Error(label + ' button not found'); button.click(); return true; })()`,
     ])
 }
 

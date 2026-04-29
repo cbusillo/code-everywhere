@@ -49,11 +49,17 @@ const run = async () => {
             sessionId: tuiSession.sessionId,
         })
 
-        await clickFirstStatusButton(uiBrowser, session)
+        await clickFirstCommandButton(uiBrowser, session, "Status")
         const outcome = await waitForCommandOutcome(brokerUrl, "status_request")
         assertEqual(outcome.status, "accepted", "status command outcome")
         assertEqual(outcome.sessionId, tuiSession.sessionId, "status command session")
         assertEqual(outcome.sessionEpoch, tuiSession.sessionEpoch, "status command epoch")
+        await clickFirstCommandButton(uiBrowser, session, "Pause")
+        const pauseOutcome = await waitForCommandOutcome(brokerUrl, "pause_current_turn")
+        assertEqual(pauseOutcome.status, "rejected", "idle pause command outcome")
+        assertEqual(pauseOutcome.reason, "no active turn is running", "idle pause rejection reason")
+        assertEqual(pauseOutcome.sessionId, tuiSession.sessionId, "idle pause command session")
+        assertEqual(pauseOutcome.sessionEpoch, tuiSession.sessionEpoch, "idle pause command epoch")
 
         await stopProcess(broker)
         broker = null
@@ -287,10 +293,10 @@ const assertBrowserState = async (uiBrowser, session, expected) => {
     }
 }
 
-const clickFirstStatusButton = async (uiBrowser, session) => {
+const clickFirstCommandButton = async (uiBrowser, session, label) => {
     await ui(uiBrowser, session, [
         "eval",
-        "(() => { const button = Array.from(document.querySelectorAll('button')).find((candidate) => candidate.innerText.trim() === 'Status'); if (!button) throw new Error('Status button not found'); button.click(); return true; })()",
+        `(() => { const label = ${JSON.stringify(label)}; const button = Array.from(document.querySelectorAll('button')).find((candidate) => candidate.innerText.trim() === label); if (!button) throw new Error(label + ' button not found'); button.click(); return true; })()`,
     ])
 }
 
