@@ -70,6 +70,12 @@ type CommandHistoryEntry = {
     detail: string
 }
 
+type CockpitStateSurface = {
+    tone: "info" | "warning" | "success"
+    title: string
+    detail: string
+}
+
 const statusIcon: Record<SessionStatus, IconComponent> = {
     running: CirclePlay,
     idle: Clock3,
@@ -158,6 +164,7 @@ export const App = () => {
             : (cockpit.sessions.find((session) => session.sessionId === activeSessionId) ?? fallbackSession)
     const attentionSessions = useMemo(() => getAttentionSessions(cockpit.sessions), [cockpit.sessions])
     const attentionSummary = useMemo(() => getOperatorAttentionSummary(cockpit), [cockpit])
+    const stateSurface = useMemo(() => getCockpitStateSurface(cockpit, cockpitView.transport), [cockpit, cockpitView.transport])
     const sessionApprovals = cockpit.approvals.filter((approval) => approval.sessionId === activeSession?.sessionId)
     const sessionInputs = cockpit.requestedInputs.filter(
         (input) => input.sessionId === activeSession?.sessionId && hasActionableRequestedInput(input),
@@ -246,6 +253,8 @@ export const App = () => {
                     </div>
                 </header>
 
+                <CockpitStateBanner surface={stateSurface} />
+
                 <AttentionOverview summary={attentionSummary} onSelectItem={selectAttentionItem} />
 
                 <section className="cockpit-grid" aria-label="Every Code sessions cockpit">
@@ -331,6 +340,22 @@ const SessionList = ({ sessions, activeSessionId, onSelect }: SessionListProps) 
         </div>
     </aside>
 )
+
+const CockpitStateBanner = ({ surface }: { surface: CockpitStateSurface | null }) => {
+    if (surface === null) {
+        return null
+    }
+
+    const Icon = surface.tone === "success" ? Check : surface.tone === "warning" ? AlertCircle : Info
+
+    return (
+        <section className={`state-banner is-${surface.tone}`} aria-label="Cockpit connection state">
+            <Icon size={16} aria-hidden="true" />
+            <strong>{surface.title}</strong>
+            <p>{surface.detail}</p>
+        </section>
+    )
+}
 
 type AttentionOverviewProps = {
     summary: OperatorAttentionSummary
@@ -841,6 +866,53 @@ const emptySessionDetailCopy = (transport: CockpitTransportStatus): string => {
                 ? "The cockpit is showing the last known snapshot because the local broker is unavailable."
                 : `The cockpit is showing the last known snapshot because the local broker is unavailable: ${transport.error}`
     }
+}
+
+const getCockpitStateSurface = (
+    cockpit: { sessions: CockpitSession[]; staleEvents: unknown[] },
+    transport: CockpitTransportStatus,
+): CockpitStateSurface | null => {
+    if (transport.mode === "connecting") {
+        return {
+            tone: "info",
+            title: "Connecting to local broker",
+            detail: "The cockpit is waiting for its first live snapshot and is holding the fixture view until the broker responds.",
+        }
+    }
+
+    if (transport.mode === "fallback") {
+        return {
+            tone: "warning",
+            title: "Broker reconnecting",
+            detail: transport.error ?? "Showing the last known snapshot while polling resumes.",
+        }
+    }
+
+    if (transport.mode === "fixture") {
+        return {
+            tone: "info",
+            title: "Fixture mode",
+            detail: "No local broker URL is configured, so the cockpit is showing review data instead of live Every Code sessions.",
+        }
+    }
+
+    if (cockpit.sessions.length === 0) {
+        return {
+            tone: "success",
+            title: "No live sessions",
+            detail: "The broker is healthy, but no trusted Every Code sessions have published a snapshot yet.",
+        }
+    }
+
+    if (cockpit.staleEvents.length > 0) {
+        return {
+            tone: "warning",
+            title: "Stale event evidence retained",
+            detail: `${String(cockpit.staleEvents.length)} stale epoch ${cockpit.staleEvents.length === 1 ? "event" : "events"} kept for operator review.`,
+        }
+    }
+
+    return null
 }
 
 const ActionButton = ({ icon: Icon, label, onClick }: { icon: IconComponent; label: string; onClick: () => void }) => (
