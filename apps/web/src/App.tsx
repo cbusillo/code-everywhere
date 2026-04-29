@@ -174,6 +174,7 @@ export const App = () => {
         activePendingItemId === null || selectedApproval !== undefined ? (selectedApproval ?? sessionApprovals[0]) : undefined
     const activeInput = activePendingItemId === null || selectedInput !== undefined ? (selectedInput ?? sessionInputs[0]) : undefined
     const activeCommandHistory = getCommandHistoryEntries(cockpit.commands, cockpit.commandOutcomes, activeSession)
+    const activeCommandOutcomeSummary = getCommandOutcomeSummary(cockpit.commands, cockpit.commandOutcomes, activeSession)
     const reply = getDraftValue(replyDrafts, activeSession?.sessionId)
     const inputAnswerValues = getRequestedInputAnswerValues(inputAnswerDrafts, activeInput)
     const inputNote = getRequestedInputNoteValue(inputAnswerDrafts, activeInput)
@@ -285,6 +286,7 @@ export const App = () => {
                                 setInputNote={setInputNote}
                                 commandLog={commandLog}
                                 commandHistory={activeCommandHistory}
+                                commandOutcomeSummary={activeCommandOutcomeSummary}
                                 dispatchCommand={dispatchCommand}
                             />
                         </>
@@ -608,6 +610,7 @@ type ActionRailProps = {
     setInputNote: (value: string) => void
     commandLog: string
     commandHistory: CommandHistoryEntry[]
+    commandOutcomeSummary: CommandOutcomeSummary
     dispatchCommand: (label: string, command: SessionCommand) => void
 }
 
@@ -621,6 +624,7 @@ const ActionRail = ({
     setInputNote,
     commandLog,
     commandHistory,
+    commandOutcomeSummary,
     dispatchCommand,
 }: ActionRailProps) => (
     <aside className="action-rail" aria-label="Pending work and actions">
@@ -681,7 +685,7 @@ const ActionRail = ({
             <div className="mock-log" aria-live="polite">
                 <span>Command status</span>
                 <p>{commandLog}</p>
-                <CommandOutcomeOverview summary={getCommandOutcomeSummary(commandHistory)} />
+                <CommandOutcomeOverview summary={commandOutcomeSummary} />
                 <CommandHistory entries={commandHistory} />
             </div>
             <div className="epoch-note">
@@ -912,7 +916,7 @@ const emptySessionDetailCopy = (transport: CockpitTransportStatus): string => {
     }
 }
 
-const getCockpitStateSurface = (
+export const getCockpitStateSurface = (
     cockpit: { sessions: CockpitSession[]; staleEvents: unknown[] },
     transport: CockpitTransportStatus,
 ): CockpitStateSurface | null => {
@@ -940,19 +944,19 @@ const getCockpitStateSurface = (
         }
     }
 
-    if (cockpit.sessions.length === 0) {
-        return {
-            tone: "success",
-            title: "No live sessions",
-            detail: "The broker is healthy, but no trusted Every Code sessions have published a snapshot yet.",
-        }
-    }
-
     if (cockpit.staleEvents.length > 0) {
         return {
             tone: "warning",
             title: "Stale event evidence retained",
             detail: `${String(cockpit.staleEvents.length)} stale epoch ${cockpit.staleEvents.length === 1 ? "event" : "events"} kept for operator review.`,
+        }
+    }
+
+    if (cockpit.sessions.length === 0) {
+        return {
+            tone: "success",
+            title: "No live sessions",
+            detail: "The broker is healthy, but no trusted Every Code sessions have published a snapshot yet.",
         }
     }
 
