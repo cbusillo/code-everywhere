@@ -87,6 +87,45 @@ describe("cockpit HTTP transport", () => {
         })
     })
 
+    it("requires configured auth token on broker routes", async () => {
+        const protectedServer = createCockpitHttpServer({ authToken: "test-secret" })
+        await new Promise<void>((resolve) => {
+            protectedServer.listen(0, "127.0.0.1", resolve)
+        })
+        const address = protectedServer.address() as AddressInfo
+        const protectedBaseUrl = `http://127.0.0.1:${String(address.port)}`
+
+        try {
+            await expect(sendJson(protectedBaseUrl, "GET", "/snapshot")).resolves.toMatchObject({
+                statusCode: 401,
+                body: { error: "Unauthorized" },
+            })
+
+            const bearerResponse = await sendJson(protectedBaseUrl, "GET", "/snapshot", undefined, {
+                authorization: "Bearer test-secret",
+            })
+            expect(bearerResponse.statusCode).toBe(200)
+
+            const headerResponse = await sendJson(protectedBaseUrl, "GET", "/snapshot", undefined, {
+                "x-code-everywhere-token": "test-secret",
+            })
+            expect(headerResponse.statusCode).toBe(200)
+            expect(headerResponse.headers["access-control-allow-headers"]).toContain("authorization")
+            expect(headerResponse.headers["access-control-allow-headers"]).toContain("x-code-everywhere-token")
+        } finally {
+            await new Promise<void>((resolve, reject) => {
+                protectedServer.close((error) => {
+                    if (error !== undefined) {
+                        reject(error)
+                        return
+                    }
+
+                    resolve()
+                })
+            })
+        }
+    })
+
     it("ingests a single event and event array", async () => {
         const helloResponse = await sendJson(baseUrl, "POST", "/events", {
             event: {
@@ -485,10 +524,21 @@ type TestResponse = {
     body: unknown
 }
 
-const sendJson = (baseUrl: string, method: string, path: string, body?: unknown): Promise<TestResponse> =>
-    sendRaw(baseUrl, method, path, body === undefined ? undefined : JSON.stringify(body))
+const sendJson = (
+    baseUrl: string,
+    method: string,
+    path: string,
+    body?: unknown,
+    headers?: Record<string, string>,
+): Promise<TestResponse> => sendRaw(baseUrl, method, path, body === undefined ? undefined : JSON.stringify(body), headers)
 
-const sendRaw = (baseUrl: string, method: string, path: string, body?: string): Promise<TestResponse> => {
+const sendRaw = (
+    baseUrl: string,
+    method: string,
+    path: string,
+    body?: string,
+    headers?: Record<string, string>,
+): Promise<TestResponse> => {
     const url = new URL(path, baseUrl)
     const options: RequestOptions = {
         hostname: url.hostname,
@@ -497,6 +547,7 @@ const sendRaw = (baseUrl: string, method: string, path: string, body?: string): 
         method,
         headers: {
             "content-type": "application/json",
+            ...headers,
         },
     }
 

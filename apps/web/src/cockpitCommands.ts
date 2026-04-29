@@ -5,6 +5,11 @@ import type { CockpitTransportStatus } from "./cockpitTransport"
 
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
 
+const configuredAuthToken = (() => {
+    const authToken: unknown = import.meta.env.VITE_COCKPIT_AUTH_TOKEN
+    return typeof authToken === "string" ? normalizeAuthToken(authToken) : null
+})()
+
 export const postCockpitCommand = async (
     transportUrl: string,
     command: SessionCommand,
@@ -16,6 +21,7 @@ export const postCockpitCommand = async (
         headers: {
             accept: "application/json",
             "content-type": "application/json",
+            ...createAuthHeaders(configuredAuthToken),
         },
         body: JSON.stringify({ command }),
     })
@@ -40,6 +46,7 @@ export const fetchCockpitCommands = async (
         cache: "no-store",
         headers: {
             accept: "application/json",
+            ...createAuthHeaders(configuredAuthToken),
         },
     })
 
@@ -56,6 +63,15 @@ export const fetchCockpitCommands = async (
 }
 
 export const createCommandUrl = (transportUrl: string): string => `${transportUrl.replace(/\/+$/, "")}/commands`
+
+function normalizeAuthToken(authToken: string): string | null {
+    const normalized = authToken.trim()
+    return normalized === "" ? null : normalized
+}
+
+function createAuthHeaders(authToken: string | null): Record<string, string> {
+    return authToken === null ? {} : { authorization: `Bearer ${authToken}` }
+}
 
 export const canPostCockpitCommand = (
     transport: CockpitTransportStatus,

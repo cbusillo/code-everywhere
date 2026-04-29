@@ -57,6 +57,10 @@ const configuredPollIntervalMs = (() => {
     const pollIntervalMs: unknown = import.meta.env.VITE_COCKPIT_POLL_INTERVAL_MS
     return typeof pollIntervalMs === "string" ? normalizePollIntervalMs(pollIntervalMs) : null
 })()
+const configuredAuthToken = (() => {
+    const authToken: unknown = import.meta.env.VITE_COCKPIT_AUTH_TOKEN
+    return typeof authToken === "string" ? normalizeAuthToken(authToken) : null
+})()
 
 export const useCockpitView = (options: UseCockpitViewOptions = {}): CockpitViewState => {
     const transportUrl = normalizeTransportUrl(options.transportUrl) ?? configuredTransportUrl
@@ -202,6 +206,7 @@ export const fetchCockpitSnapshot = async (
         cache: "no-store",
         headers: {
             accept: "application/json",
+            ...createAuthHeaders(configuredAuthToken),
         },
     })
 
@@ -219,6 +224,15 @@ export const fetchCockpitSnapshot = async (
 }
 
 export const createSnapshotUrl = (transportUrl: string): string => `${transportUrl.replace(/\/+$/, "")}/snapshot`
+
+function normalizeAuthToken(authToken: string): string | null {
+    const normalized = authToken.trim()
+    return normalized === "" ? null : normalized
+}
+
+function createAuthHeaders(authToken: string | null): Record<string, string> {
+    return authToken === null ? {} : { authorization: `Bearer ${authToken}` }
+}
 
 export function normalizeTransportUrl(transportUrl: string | undefined): string | null {
     const normalized = transportUrl?.trim()

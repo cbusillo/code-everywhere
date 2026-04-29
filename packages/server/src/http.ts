@@ -30,6 +30,7 @@ export type CockpitHttpHandlerOptions = {
     store?: CockpitEventStore
     commandStore?: CockpitCommandStore
     maxBodyBytes?: number
+    authToken?: string | null
 }
 
 export type CockpitHttpServerOptions = CockpitHttpHandlerOptions
@@ -75,9 +76,10 @@ export const createCockpitHttpHandler = (options: CockpitHttpHandlerOptions = {}
     const store = options.store ?? createCockpitEventStore()
     const commandStore = options.commandStore ?? createCockpitCommandStore()
     const maxBodyBytes = options.maxBodyBytes ?? defaultMaxBodyBytes
+    const authToken = normalizeAuthToken(options.authToken)
 
     return (request: IncomingMessage, response: ServerResponse): void => {
-        void routeRequest(request, response, store, commandStore, maxBodyBytes).catch((error: unknown) => {
+        void routeRequest(request, response, store, commandStore, maxBodyBytes, authToken).catch((error: unknown) => {
             if (error instanceof HttpInputError) {
                 writeJson(response, error.statusCode, { error: error.message })
                 return
@@ -97,6 +99,7 @@ const routeRequest = async (
     store: CockpitEventStore,
     commandStore: CockpitCommandStore,
     maxBodyBytes: number,
+    authToken: string | null,
 ): Promise<void> => {
     setCorsHeaders(response)
 
@@ -107,6 +110,12 @@ const routeRequest = async (
     }
 
     const url = parseRequestUrl(request)
+
+    if (!isAuthorizedRequest(request, authToken)) {
+        response.setHeader("www-authenticate", 'Bearer realm="code-everywhere"')
+        writeJson(response, 401, { error: "Unauthorized" })
+        return
+    }
 
     if (url.pathname === "/snapshot") {
         if (request.method !== "GET") {
@@ -195,6 +204,34 @@ const routeRequest = async (
 }
 
 const parseRequestUrl = (request: IncomingMessage): URL => new URL(request.url ?? "/", "http://localhost")
+
+const normalizeAuthToken = (token: string | null | undefined): string | null => {
+    const normalized = token?.trim()
+    return normalized === undefined || normalized === "" ? null : normalized
+}
+
+const isAuthorizedRequest = (request: IncomingMessage, authToken: string | null): boolean => {
+    if (authToken === null) {
+        return true
+    }
+
+    return getBearerToken(request) === authToken || getHeaderValue(request, "x-code-everywhere-token") === authToken
+}
+
+const getBearerToken = (request: IncomingMessage): string | null => {
+    const authorization = getHeaderValue(request, "authorization")
+    const match = /^Bearer\s+(.+)$/i.exec(authorization)
+    return match?.[1]?.trim() ?? null
+}
+
+const getHeaderValue = (request: IncomingMessage, name: string): string => {
+    const value = request.headers[name]
+    if (Array.isArray(value)) {
+        return value[0]?.trim() ?? ""
+    }
+
+    return value?.trim() ?? ""
+}
 
 const readJsonBody = async (request: IncomingMessage, maxBodyBytes: number, allowEmpty = false): Promise<unknown> => {
     const chunks: Uint8Array[] = []
@@ -510,7 +547,7 @@ const writeMethodNotAllowed = (response: ServerResponse, allow: string): void =>
 const setCorsHeaders = (response: ServerResponse): void => {
     response.setHeader("access-control-allow-origin", "*")
     response.setHeader("access-control-allow-methods", "GET, POST, OPTIONS")
-    response.setHeader("access-control-allow-headers", "content-type, accept")
+    response.setHeader("access-control-allow-headers", "authorization, content-type, accept, x-code-everywhere-token")
 }
 
 const writeJson = (response: ServerResponse, statusCode: number, payload: JsonResponse): void => {
