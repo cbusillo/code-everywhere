@@ -87,10 +87,10 @@ describe("cockpit fake data", () => {
                 {
                     commandId: "command-stale",
                     sessionId: "ce-alpha",
-                    sessionEpoch: "epoch-34",
+                    sessionEpoch: "epoch-33",
                     commandKind: "approval_decision",
                     status: "rejected",
-                    reason: "stale session scope: command targeted an old epoch",
+                    reason: "command targeted an old epoch",
                     handledAt: "2026-04-27T16:06:00.000Z",
                 },
                 {
@@ -184,13 +184,13 @@ describe("cockpit fake data", () => {
         expect(history[0]).toMatchObject({
             id: "command-delta-rejected",
             state: "rejected",
-            isStale: true,
+            isStale: false,
             isCurrentEpoch: true,
         })
         expect(summary).toMatchObject({
             total: 1,
             rejected: 1,
-            stale: 1,
+            stale: 0,
         })
     })
 
@@ -217,10 +217,10 @@ describe("cockpit fake data", () => {
             {
                 commandId: "command-hidden-stale",
                 sessionId: session.sessionId,
-                sessionEpoch: session.sessionEpoch,
+                sessionEpoch: "epoch-2",
                 commandKind: "continue_autonomously",
                 status: "rejected",
-                reason: "stale command retained for review",
+                reason: "command retained for review",
                 handledAt: "2026-04-27T15:40:00.000Z",
             },
         ]

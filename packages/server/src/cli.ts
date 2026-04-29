@@ -106,7 +106,7 @@ export const parseCockpitServerArgs = (args: readonly string[], variables: NodeJ
         }
 
         if (arg === "--auth-token") {
-            authToken = readOptionValue(args, index, "--auth-token")
+            authToken = readOptionValue(args, index, "--auth-token", { allowLeadingHyphen: true })
             index += 1
             continue
         }
@@ -213,12 +213,16 @@ const isLoopbackHost = (host: string): boolean => {
     return normalized === "localhost" || normalized === "::1" || normalized === "[::1]" || normalized.startsWith("127.")
 }
 
-const readOptionValue = (args: readonly string[], index: number, option: string): string =>
-    requireNonEmptyValue(args[index + 1], option)
+const readOptionValue = (
+    args: readonly string[],
+    index: number,
+    option: string,
+    options: { allowLeadingHyphen?: boolean } = {},
+): string => requireNonEmptyValue(args[index + 1], option, options)
 
-const requireNonEmptyValue = (value: string | undefined, option: string): string => {
+const requireNonEmptyValue = (value: string | undefined, option: string, options: { allowLeadingHyphen?: boolean } = {}): string => {
     const normalized = normalizeHost(value)
-    if (normalized === undefined || normalized.startsWith("-")) {
+    if (normalized === undefined || (!options.allowLeadingHyphen && normalized.startsWith("-"))) {
         throw new CockpitServerCliError(`${option} requires a value`)
     }
 
