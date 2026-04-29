@@ -110,6 +110,11 @@ Every Code adapter that consumes them:
 - the broker persists local state to `.code-everywhere/cockpit-broker.json` by
   default; pass `--memory` for an ephemeral run or `--data-file <path>` to use a
   different file
+- the broker has a separate local trust registry at `.code-everywhere/trust.json`
+  by default; pass `--trust-file <path>` or set `CODE_EVERYWHERE_TRUST_FILE` to
+  use a different registry file
+- `--memory` disables both broker state and trust registry file persistence for
+  the run
 - loopback-only broker usage remains tokenless by default for local development
 - when `--auth-token <token>` or `CODE_EVERYWHERE_AUTH_TOKEN` is set, all broker
   routes require `Authorization: Bearer <token>` or `X-Code-Everywhere-Token`

@@ -29,6 +29,14 @@
                 "default": "./dist/http-client.js"
             },
             "default": "./src/http-client.ts"
+        },
+        "./trust": {
+            "types": "./src/trust.ts",
+            "node": {
+                "development": "./src/trust.ts",
+                "default": "./dist/trust.js"
+            },
+            "default": "./src/trust.ts"
         }
     },
     "scripts": {

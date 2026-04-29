@@ -4,11 +4,13 @@ import { pathToFileURL } from "node:url"
 
 import { createCockpitHttpServer } from "./http.js"
 import { createPersistentCockpitStores } from "./persistence.js"
+import { createLocalTrustRegistryStore, createPersistentLocalTrustRegistryStore, type LocalTrustRegistryStore } from "./trust.js"
 
 export type CockpitServerCliOptions = {
     host: string
     port: number
     dataFile: string | null
+    trustFile: string | null
     authToken: string | null
     help: boolean
 }
@@ -16,25 +18,28 @@ export type CockpitServerCliOptions = {
 export type RunningCockpitServer = {
     server: Server
     url: string
+    trustStore: LocalTrustRegistryStore
 }
 
 const defaultHost = "127.0.0.1"
 const defaultPort = 4789
 const defaultDataFile = ".code-everywhere/cockpit-broker.json"
+const defaultTrustFile = ".code-everywhere/trust.json"
 
 export class CockpitServerCliError extends Error {}
 
 export const formatCockpitServerHelp = (): string => `Code Everywhere cockpit HTTP server
 
 Usage:
-  pnpm cockpit:server [--host 127.0.0.1] [--port 4789] [--data-file .code-everywhere/cockpit-broker.json] [--auth-token <token>]
+  pnpm cockpit:server [--host 127.0.0.1] [--port 4789] [--data-file .code-everywhere/cockpit-broker.json] [--trust-file .code-everywhere/trust.json] [--auth-token <token>]
 
 Options:
   --host <host>            Bind address. Defaults to CODE_EVERYWHERE_HOST or ${defaultHost}.
   --port <port>            Bind port. Defaults to CODE_EVERYWHERE_PORT or ${String(defaultPort)}.
   --data-file <path>       Persistence file. Defaults to CODE_EVERYWHERE_DATA_FILE or ${defaultDataFile}.
+  --trust-file <path>      Local trust registry. Defaults to CODE_EVERYWHERE_TRUST_FILE or ${defaultTrustFile}.
   --auth-token <token>      Require token auth. Defaults to CODE_EVERYWHERE_AUTH_TOKEN.
-  --memory                 Disable file persistence for this run.
+  --memory                 Disable event and trust file persistence for this run.
   -h, --help               Show this help.
 `
 
@@ -44,6 +49,7 @@ export const parseCockpitServerArgs = (args: readonly string[], variables: NodeJ
             host: defaultHost,
             port: defaultPort,
             dataFile: defaultDataFile,
+            trustFile: defaultTrustFile,
             authToken: null,
             help: true,
         }
@@ -52,6 +58,7 @@ export const parseCockpitServerArgs = (args: readonly string[], variables: NodeJ
     let host = normalizeHost(variables.CODE_EVERYWHERE_HOST) ?? defaultHost
     let port: number | undefined
     let dataFile: string | null = normalizeValue(variables.CODE_EVERYWHERE_DATA_FILE) ?? defaultDataFile
+    let trustFile: string | null = normalizeValue(variables.CODE_EVERYWHERE_TRUST_FILE) ?? defaultTrustFile
     let authToken: string | null = normalizeValue(variables.CODE_EVERYWHERE_AUTH_TOKEN) ?? null
     let help = false
 
@@ -102,6 +109,18 @@ export const parseCockpitServerArgs = (args: readonly string[], variables: NodeJ
 
         if (arg === "--memory") {
             dataFile = null
+            trustFile = null
+            continue
+        }
+
+        if (arg === "--trust-file") {
+            trustFile = readOptionValue(args, index, "--trust-file")
+            index += 1
+            continue
+        }
+
+        if (arg?.startsWith("--trust-file=")) {
+            trustFile = requireNonEmptyValue(arg.slice("--trust-file=".length), "--trust-file")
             continue
         }
 
@@ -123,6 +142,7 @@ export const parseCockpitServerArgs = (args: readonly string[], variables: NodeJ
         host,
         port: port ?? parsePort(variables.CODE_EVERYWHERE_PORT, "CODE_EVERYWHERE_PORT") ?? defaultPort,
         dataFile,
+        trustFile,
         authToken,
         help,
     }
@@ -137,7 +157,11 @@ export const cockpitServerUrl = (host: string, port: number): string => {
 }
 
 export const startCockpitHttpServer = async (
-    options: Pick<CockpitServerCliOptions, "host" | "port"> & { authToken?: string | null; dataFile?: string | null },
+    options: Pick<CockpitServerCliOptions, "host" | "port"> & {
+        authToken?: string | null
+        dataFile?: string | null
+        trustFile?: string | null
+    },
 ): Promise<RunningCockpitServer> => {
     const authToken = normalizeValue(options.authToken ?? undefined) ?? null
     if (!isLoopbackHost(options.host) && authToken === null) {
@@ -146,6 +170,10 @@ export const startCockpitHttpServer = async (
 
     const stores =
         options.dataFile === undefined || options.dataFile === null ? undefined : createPersistentCockpitStores(options.dataFile)
+    const trustStore =
+        options.trustFile === undefined || options.trustFile === null
+            ? createLocalTrustRegistryStore()
+            : createPersistentLocalTrustRegistryStore(options.trustFile)
     const server = createCockpitHttpServer({ ...(stores ?? {}), authToken })
     await new Promise<void>((resolve, reject) => {
         const onError = (error: Error) => {
@@ -168,6 +196,7 @@ export const startCockpitHttpServer = async (
     return {
         server,
         url: cockpitServerUrl(options.host, port),
+        trustStore,
     }
 }
 
@@ -187,6 +216,9 @@ export const runCockpitServerCli = async (
         stdout.write(`Code Everywhere cockpit HTTP server listening at ${running.url}\n`)
         if (options.dataFile !== null) {
             stdout.write(`Persisting broker state to ${options.dataFile}\n`)
+        }
+        if (options.trustFile !== null) {
+            stdout.write(`Persisting local trust registry to ${options.trustFile}\n`)
         }
         if (options.authToken !== null) {
             stdout.write("Broker auth token enabled.\n")
