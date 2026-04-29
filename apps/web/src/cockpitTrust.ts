@@ -48,6 +48,44 @@ export const postRevokedHost = async (
     return postTrustJson(transportUrl, "hosts/revoke", { hostId: session.hostId, revokedAt: now().toISOString() }, fetchImpl)
 }
 
+export const postRevokedHostId = async (
+    transportUrl: string,
+    hostId: string,
+    now: () => Date = () => new Date(),
+    fetchImpl: FetchLike = globalThis.fetch,
+): Promise<LocalTrustRegistrySnapshot> => {
+    const normalizedHostId = hostId.trim()
+    if (normalizedHostId === "") {
+        throw new Error("Host id is required")
+    }
+
+    return postTrustJson(transportUrl, "hosts/revoke", { hostId: normalizedHostId, revokedAt: now().toISOString() }, fetchImpl)
+}
+
+export const fetchLocalTrustRegistry = async (
+    transportUrl: string,
+    fetchImpl: FetchLike = globalThis.fetch,
+): Promise<LocalTrustRegistrySnapshot> => {
+    const response = await fetchImpl(createTrustUrl(transportUrl), {
+        cache: "no-store",
+        headers: {
+            accept: "application/json",
+            ...createAuthHeaders(configuredAuthToken),
+        },
+    })
+
+    if (!response.ok) {
+        throw new Error(`Cockpit trust request failed with ${String(response.status)}`)
+    }
+
+    const payload = (await response.json()) as unknown
+    if (!isLocalTrustRegistrySnapshot(payload)) {
+        throw new Error("Cockpit trust response did not match the expected shape")
+    }
+
+    return payload
+}
+
 export const createTrustUrl = (transportUrl: string, path = ""): string => {
     const normalizedPath = path.replace(/^\/+/, "")
     return `${transportUrl.replace(/\/+$/, "")}/trust${normalizedPath === "" ? "" : `/${normalizedPath}`}`

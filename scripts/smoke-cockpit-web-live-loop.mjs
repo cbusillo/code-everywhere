@@ -26,16 +26,14 @@ const run = async () => {
         await waitForHttp(webUrl, "web cockpit")
 
         await ui(uiBrowser, session, ["open", webUrl, "1000"])
-        await ui(uiBrowser, session, ["wait-for", "text=No live sessions", "10000"])
-        await assertBrowserState(uiBrowser, session, {
+        await waitForBrowserState(uiBrowser, session, {
             mode: "Live HTTP",
             state: "No live sessions",
             detail: "no Every Code sessions",
         })
 
         await postJson(`${brokerUrl}/events`, { events: createLiveLoopEvents("Smoke broker live loop") })
-        await ui(uiBrowser, session, ["wait-for", "text=Smoke broker live loop", "10000"])
-        await assertBrowserState(uiBrowser, session, {
+        await waitForBrowserState(uiBrowser, session, {
             mode: "Live HTTP",
             state: "Stale event evidence retained",
             summary: "Smoke broker live loop",
@@ -45,6 +43,10 @@ const run = async () => {
 
         await clickFirstCommandButton(uiBrowser, session, "Trust")
         await waitForTrustedHost(brokerUrl, "smoke-host")
+        await waitForBrowserState(uiBrowser, session, {
+            trustRegistry: "Known hosts",
+            trustedHost: "smoke-host",
+        })
 
         await clickFirstCommandButton(uiBrowser, session, "Status")
         await waitForCommand(brokerUrl, "status_request")
@@ -55,8 +57,7 @@ const run = async () => {
 
         await stopProcess(broker)
         broker = null
-        await ui(uiBrowser, session, ["wait-for", "text=HTTP fallback", "10000"])
-        await assertBrowserState(uiBrowser, session, {
+        await waitForBrowserState(uiBrowser, session, {
             mode: "HTTP fallback",
             state: "Broker reconnecting",
             summary: "Smoke broker live loop",
@@ -67,8 +68,7 @@ const run = async () => {
         broker = startBroker(brokerPort)
         await waitForHttp(`${brokerUrl}/snapshot`, "restarted cockpit broker")
         await postJson(`${brokerUrl}/events`, { events: createLiveLoopEvents("Smoke broker reconnected") })
-        await ui(uiBrowser, session, ["wait-for", "text=Smoke broker reconnected", "10000"])
-        await assertBrowserState(uiBrowser, session, {
+        await waitForBrowserState(uiBrowser, session, {
             mode: "Live HTTP",
             summary: "Smoke broker reconnected",
             sessionId: "smoke-live-session",
@@ -254,12 +254,34 @@ const getJson = async (url) => {
 
 const ui = async (uiBrowser, session, args) => runCommand(uiBrowser, ["--session", session, ...args])
 
-const assertBrowserState = async (uiBrowser, session, expected) => {
+const waitForBrowserState = async (uiBrowser, session, expected) => {
+    const startedAt = Date.now()
+    let lastError = null
+
+    while (Date.now() - startedAt < 10000) {
+        try {
+            await assertBrowserState(uiBrowser, session, expected)
+            return
+        } catch (error) {
+            lastError = error
+        }
+        await delay(100)
+    }
+
+    throw lastError instanceof Error ? lastError : new Error("Timed out waiting for browser state")
+}
+
+const readBrowserState = async (uiBrowser, session) => {
     const raw = await ui(uiBrowser, session, [
         "eval",
-        "(() => ({ text: document.body.innerText, canScrollX: document.documentElement.scrollWidth > document.documentElement.clientWidth }))()",
+        "(() => ({ text: `${document.body.innerText}\n${document.body.textContent ?? ''}`, canScrollX: document.documentElement.scrollWidth > document.documentElement.clientWidth }))()",
     ])
-    const state = JSON.parse(raw)
+
+    return JSON.parse(raw)
+}
+
+const assertBrowserState = async (uiBrowser, session, expected) => {
+    const state = await readBrowserState(uiBrowser, session)
 
     for (const [label, value] of Object.entries(expected)) {
         if (!state.text.includes(value)) {
