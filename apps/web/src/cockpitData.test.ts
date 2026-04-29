@@ -6,6 +6,8 @@ import {
     cockpitFixtureSnapshot,
     createCockpitFixtureFromSnapshot,
     getAttentionSessions,
+    getCommandHistoryEntries,
+    getCommandOutcomeSummary,
     getOperatorAttentionSummary,
     getSessionDetailSummary,
     statusLabels,
@@ -165,5 +167,29 @@ describe("cockpit fake data", () => {
         })
         expect(summary.blockedCount).toBe(3)
         expect(summary.errorCount).toBe(0)
+    })
+
+    it("summarizes retained rejected command outcomes for the selected session", () => {
+        const session = cockpitFixture.sessions.find((candidate) => candidate.sessionId === "ce-delta")
+        expect(session).toBeDefined()
+        if (session === undefined) {
+            throw new Error("Expected ce-delta fixture session")
+        }
+
+        const history = getCommandHistoryEntries(cockpitFixture.commands, cockpitFixture.commandOutcomes, session)
+        const summary = getCommandOutcomeSummary(history)
+
+        expect(history).toHaveLength(1)
+        expect(history[0]).toMatchObject({
+            id: "command-delta-rejected",
+            state: "rejected",
+            isStale: true,
+            isCurrentEpoch: true,
+        })
+        expect(summary).toMatchObject({
+            total: 1,
+            rejected: 1,
+            stale: 1,
+        })
     })
 })

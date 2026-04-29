@@ -1,6 +1,5 @@
 import * as Dialog from "@radix-ui/react-dialog"
 import type {
-    CommandOutcome,
     PendingApproval,
     RequestedInput,
     SessionCommand,
@@ -9,7 +8,6 @@ import type {
     TurnStatus,
     TurnStep,
 } from "@code-everywhere/contracts"
-import type { CockpitCommandRecord } from "@code-everywhere/server"
 import {
     AlertCircle,
     Bell,
@@ -38,11 +36,15 @@ import { useMemo, useState } from "react"
 import { canPostCockpitCommand, postCockpitCommand } from "./cockpitCommands"
 import {
     getAttentionSessions,
+    getCommandHistoryEntries,
+    getCommandOutcomeSummary,
     getOperatorAttentionSummary,
     getSessionDetailSummary,
     hasActionableRequestedInput,
     statusLabels,
     type CockpitSession,
+    type CommandHistoryEntry,
+    type CommandOutcomeSummary,
     type OperatorAttentionItem,
     type OperatorAttentionKind,
     type OperatorAttentionSummary,
@@ -64,14 +66,6 @@ import { describeTransportStatus, useCockpitView, type CockpitTransportStatus } 
 const selectedSessionId = "ce-alpha"
 
 type IconComponent = typeof CirclePlay
-
-type CommandHistoryEntry = {
-    id: string
-    label: string
-    state: "queued" | "delivered" | "accepted" | "rejected"
-    timestamp: string
-    detail: string
-}
 
 type CockpitStateSurface = {
     tone: "info" | "warning" | "success"
@@ -687,6 +681,7 @@ const ActionRail = ({
             <div className="mock-log" aria-live="polite">
                 <span>Command status</span>
                 <p>{commandLog}</p>
+                <CommandOutcomeOverview summary={getCommandOutcomeSummary(commandHistory)} />
                 <CommandHistory entries={commandHistory} />
             </div>
             <div className="epoch-note">
@@ -1025,66 +1020,38 @@ const CommandHistory = ({ entries }: { entries: CommandHistoryEntry[] }) => {
     )
 }
 
-const getCommandHistoryEntries = (
-    commands: CockpitCommandRecord[],
-    outcomes: CommandOutcome[],
-    session: CockpitSession | undefined,
-): CommandHistoryEntry[] => {
-    if (session === undefined) {
-        return []
+const CommandOutcomeOverview = ({ summary }: { summary: CommandOutcomeSummary }) => {
+    if (summary.total === 0) {
+        return null
     }
 
-    const outcomesByCommandId = new Map(outcomes.map((outcome) => [outcome.commandId, outcome]))
-    const visibleCommandIds = new Set<string>()
-    const entries = commands
-        .filter((record) => {
-            const outcome = outcomesByCommandId.get(record.id)
-            return (
-                (record.command.sessionId === session.sessionId && record.command.sessionEpoch === session.sessionEpoch) ||
-                (outcome?.sessionId === session.sessionId && outcome.sessionEpoch === session.sessionEpoch)
-            )
-        })
-        .map((record): CommandHistoryEntry => {
-            const outcome = outcomesByCommandId.get(record.id)
-            const state = outcome?.status ?? (record.deliveredAt === null ? "queued" : "delivered")
-            const timestamp = outcome?.handledAt ?? record.deliveredAt ?? record.receivedAt
-            const detail = outcome?.reason ?? (record.deliveredAt === null ? "Waiting for Every Code" : "Claimed by Every Code")
-            visibleCommandIds.add(record.id)
+    const tone = summary.stale > 0 || summary.rejected > 0 ? "is-warning" : "is-success"
+    const latest = summary.latest
 
-            return {
-                id: record.id,
-                label: formatCommandKind(record.command.kind),
-                state,
-                timestamp,
-                detail,
-            }
-        })
-
-    const outcomeOnlyEntries = outcomes
-        .filter(
-            (outcome) =>
-                outcome.sessionId === session.sessionId &&
-                outcome.sessionEpoch === session.sessionEpoch &&
-                !visibleCommandIds.has(outcome.commandId),
-        )
-        .map(
-            (outcome): CommandHistoryEntry => ({
-                id: outcome.commandId,
-                label: formatCommandKind(outcome.commandKind),
-                state: outcome.status,
-                timestamp: outcome.handledAt,
-                detail: outcome.reason ?? "Outcome reported by Every Code",
-            }),
-        )
-
-    return [...entries, ...outcomeOnlyEntries].sort((left, right) => right.timestamp.localeCompare(left.timestamp)).slice(0, 5)
+    return (
+        <div className={`command-outcome-overview ${tone}`} aria-label="Command outcome summary">
+            <div className="command-outcome-metrics">
+                <span>
+                    <strong>{summary.total}</strong>
+                    retained
+                </span>
+                <span>
+                    <strong>{summary.rejected}</strong>
+                    rejected
+                </span>
+                <span>
+                    <strong>{summary.stale}</strong>
+                    stale
+                </span>
+            </div>
+            {latest === undefined ? null : (
+                <p>
+                    Latest: {latest.label} {latest.isCurrentEpoch ? "on current epoch" : "from previous epoch"}
+                </p>
+            )}
+        </div>
+    )
 }
-
-const formatCommandKind = (kind: SessionCommand["kind"]): string =>
-    kind
-        .split("_")
-        .map((part) => `${part[0]?.toUpperCase() ?? ""}${part.slice(1)}`)
-        .join(" ")
 
 const formatTime = (iso: string): string =>
     new Intl.DateTimeFormat("en", {
