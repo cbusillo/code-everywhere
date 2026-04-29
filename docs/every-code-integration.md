@@ -94,6 +94,9 @@ It should keep the next action visible and make transport health explicit:
   more than one pending item.
 - Requested-input records without questions are not actionable and are excluded
   from the attention queue and active pending-work card.
+- Session detail starts with a current-turn summary that shows the active or
+  latest turn title, summary, total projected steps, blocked/error signals, and
+  step-kind counts before lower-priority metadata and history.
 - A compact state banner explains fixture mode, first live connection, broker
   fallback/reconnect, healthy-but-empty live broker snapshots, and retained
   stale-event evidence.
