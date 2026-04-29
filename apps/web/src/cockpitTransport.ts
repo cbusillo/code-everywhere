@@ -312,6 +312,7 @@ const isProjectedCockpitSession = (value: unknown): value is ProjectedCockpitSes
     isRecord(value) &&
     isString(value.sessionId) &&
     isString(value.sessionEpoch) &&
+    isOptionalString(value.hostId) &&
     isString(value.hostLabel) &&
     isString(value.cwd) &&
     isNullableString(value.branch) &&
@@ -423,6 +424,8 @@ const isArrayOf = <Value>(value: unknown, guard: (entry: unknown) => entry is Va
     Array.isArray(value) && value.every(guard)
 
 const isString = (value: unknown): value is string => typeof value === "string"
+
+const isOptionalString = (value: unknown): value is string | undefined => value === undefined || isString(value)
 
 const isNullableString = (value: unknown): value is string | null => isString(value) || value === null
 

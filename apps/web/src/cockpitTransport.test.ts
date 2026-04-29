@@ -64,6 +64,35 @@ describe("cockpit HTTP transport client", () => {
         })
     })
 
+    it("keeps legacy snapshots without host identity backward-compatible", async () => {
+        const legacySnapshot = {
+            ...cockpitFixtureSnapshot,
+            sessions: cockpitFixtureSnapshot.sessions.map((session) => {
+                const legacySession: Record<string, unknown> = { ...session }
+                delete legacySession.hostId
+                return legacySession
+            }),
+            state: {
+                ...cockpitFixtureSnapshot.state,
+                sessions: Object.fromEntries(
+                    Object.entries(cockpitFixtureSnapshot.state.sessions).map(([sessionId, session]) => {
+                        const legacySession: Record<string, unknown> = { ...session }
+                        delete legacySession.hostId
+                        return [sessionId, legacySession]
+                    }),
+                ),
+            },
+        }
+        const fetchImpl: Parameters<typeof fetchCockpitSnapshot>[1] = () =>
+            Promise.resolve(new Response(JSON.stringify(legacySnapshot), { status: 200 }))
+
+        const snapshot = await fetchCockpitSnapshot("http://127.0.0.1:4789", fetchImpl)
+
+        expect(snapshot.sessions).toHaveLength(cockpitFixtureSnapshot.sessions.length)
+        expect(snapshot.sessions.every((session) => session.hostLabel === "Callisto MBP")).toBe(true)
+        expect(snapshot.sessions.every((session) => session.hostId === undefined)).toBe(true)
+    })
+
     it("keeps empty snapshots as valid live cockpit state", () => {
         const fixture = createCockpitFixtureFromSnapshot({
             eventCount: 0,

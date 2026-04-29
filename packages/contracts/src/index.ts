@@ -5,6 +5,7 @@ export type TurnId = string
 export type EveryCodeSession = {
     sessionId: SessionId
     sessionEpoch: SessionEpoch
+    hostId?: string
     hostLabel: string
     cwd: string
     branch: string | null

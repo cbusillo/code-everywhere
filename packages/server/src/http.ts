@@ -437,6 +437,7 @@ const isEveryCodeSession = (value: unknown): value is EveryCodeSession =>
     isRecord(value) &&
     hasString(value, "sessionId") &&
     hasString(value, "sessionEpoch") &&
+    hasOptionalString(value, "hostId") &&
     hasString(value, "hostLabel") &&
     hasString(value, "cwd") &&
     hasNullableString(value, "branch") &&
