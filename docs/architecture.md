@@ -108,8 +108,10 @@ Keychain-backed token storage, and deep-link parsing.
 Notification routing starts in Apple core as route metadata, not APNs delivery.
 Native notification payloads should carry a `code-everywhere://` route URL that
 round-trips through the same session and pending-item parser used by the app
-shell. APNs registration, device-token upload, and notification permission UX
-remain separate platform work.
+shell. Local notification readiness is modeled with native permission state and
+a scheduling abstraction for pending work, but APNs registration,
+device-token upload, hosted delivery, and production notification actions remain
+separate platform work.
 
 Device identity starts as a local Apple core record, also before APNs delivery.
 It stores non-secret install metadata in user defaults and reserves Keychain or
