@@ -121,6 +121,7 @@ describe("cockpit command client", () => {
                 kind: "request_user_input_response",
                 sessionId: "session-1",
                 sessionEpoch: "epoch-1",
+                inputId: "input-1",
                 turnId: "turn-1",
                 answers: [{ questionId: "question-1", value: "timeline" }],
             },

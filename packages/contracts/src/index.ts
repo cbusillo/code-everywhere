@@ -88,6 +88,7 @@ export type SessionCommand =
           kind: "request_user_input_response"
           sessionId: SessionId
           sessionEpoch: SessionEpoch
+          inputId?: string
           turnId: TurnId
           answers: RequestedInputAnswer[]
       }

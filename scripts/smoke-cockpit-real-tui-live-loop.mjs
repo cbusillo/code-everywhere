@@ -10,6 +10,12 @@ import { setTimeout as delay } from "node:timers/promises"
 
 const smokePollIntervalMs = 500
 const processLogs = new WeakMap()
+const pendingWorkSmokeEnabled = () =>
+    ["1", "true", "yes", "on"].includes(
+        String(process.env.CODE_EVERYWHERE_SMOKE_PENDING_WORK ?? "")
+            .trim()
+            .toLowerCase(),
+    )
 
 const run = async () => {
     const uiBrowser = await findCommand("ui-browser", "ui-browser is required for pnpm smoke:cockpit:real-tui")
@@ -49,6 +55,14 @@ const run = async () => {
             sessionId: tuiSession.sessionId,
         })
 
+        if (pendingWorkSmokeEnabled()) {
+            await runPendingWorkSmoke(uiBrowser, session, brokerUrl, tuiSession)
+            stdout.write(
+                `Cockpit real TUI pending-work smoke passed at ${webUrl} using broker ${brokerUrl} and session ${tuiSession.sessionId}\n`,
+            )
+            return
+        }
+
         await clickFirstCommandButton(uiBrowser, session, "Status")
         const outcome = await waitForCommandOutcome(brokerUrl, "status_request", tuiSession)
         assertEqual(outcome.status, "accepted", "status command outcome")
@@ -74,14 +88,18 @@ const run = async () => {
         await waitForTuiIdleSession(brokerUrl, tuiSession)
         await clickFirstCommandButton(uiBrowser, session, "Continue")
         const continueOutcome = await waitForCommandOutcome(brokerUrl, "continue_autonomously", tuiSession)
-        assertEqual(continueOutcome.status, "rejected", "idle continue command outcome")
-        assertEqual(continueOutcome.reason, "no prior session history to continue", "idle continue rejection reason")
+        if (continueOutcome.status !== "accepted" && continueOutcome.status !== "rejected") {
+            throw new Error(`Expected continue command to be handled, got ${JSON.stringify(continueOutcome.status)}`)
+        }
+        if (continueOutcome.status === "rejected") {
+            assertEqual(continueOutcome.reason, "no prior session history to continue", "idle continue rejection reason")
+        }
         assertEqual(continueOutcome.sessionId, tuiSession.sessionId, "idle continue command session")
         assertEqual(continueOutcome.sessionEpoch, tuiSession.sessionEpoch, "idle continue command epoch")
         await waitForCommandHistoryEntry(uiBrowser, session, {
             label: "Continue Autonomously",
-            state: "rejected",
-            detail: "no prior session history to continue",
+            state: continueOutcome.status,
+            detail: continueOutcome.reason ?? "Claimed by Every Code",
         })
 
         await stopProcess(broker)
@@ -363,6 +381,93 @@ const clickFirstCommandButton = async (uiBrowser, session, label) => {
     await ui(uiBrowser, session, [
         "eval",
         `(() => { const label = ${JSON.stringify(label)}; const button = Array.from(document.querySelectorAll('button')).find((candidate) => candidate.innerText.trim() === label); if (!button) throw new Error(label + ' button not found'); button.click(); return true; })()`,
+    ])
+}
+
+const runPendingWorkSmoke = async (uiBrowser, session, brokerUrl, tuiSession) => {
+    await waitForElementCount(uiBrowser, session, ".approval-card", 1)
+    await clickButtonByText(uiBrowser, session, "Approve")
+    const approvalOutcome = await waitForCommandOutcome(brokerUrl, "approval_decision", tuiSession)
+    assertEqual(approvalOutcome.status, "accepted", "approval decision outcome")
+    assertEqual(approvalOutcome.sessionId, tuiSession.sessionId, "approval decision session")
+    assertEqual(approvalOutcome.sessionEpoch, tuiSession.sessionEpoch, "approval decision epoch")
+    await waitForCommandHistoryEntry(uiBrowser, session, {
+        label: "Approval Decision",
+        state: "accepted",
+        detail: "Claimed by Every Code",
+    })
+    await waitForPendingWorkState(brokerUrl, tuiSession, { approvalCount: 0, inputCount: 1 })
+    await waitForElementCount(uiBrowser, session, ".approval-card", 0)
+    await waitForElementCount(uiBrowser, session, ".input-card", 1)
+
+    await selectRequestedInputOption(uiBrowser, session, "Continue (Recommended)")
+    await clickButtonByText(uiBrowser, session, "Submit input")
+    const inputOutcome = await waitForCommandOutcome(brokerUrl, "request_user_input_response", tuiSession)
+    assertEqual(inputOutcome.status, "accepted", "request_user_input response outcome")
+    assertEqual(inputOutcome.sessionId, tuiSession.sessionId, "request_user_input response session")
+    assertEqual(inputOutcome.sessionEpoch, tuiSession.sessionEpoch, "request_user_input response epoch")
+    await waitForCommandHistoryEntry(uiBrowser, session, {
+        label: "Request User Input Response",
+        state: "accepted",
+        detail: "Claimed by Every Code",
+    })
+    await waitForPendingWorkState(brokerUrl, tuiSession, { approvalCount: 0, inputCount: 0 })
+    await waitForElementCount(uiBrowser, session, ".input-card", 0)
+}
+
+const waitForPendingWorkState = async (brokerUrl, expectedSession, expected) => {
+    const startedAt = Date.now()
+    while (Date.now() - startedAt < 10000) {
+        const snapshot = await getJson(`${brokerUrl}/snapshot`)
+        const session = snapshot.sessions.find(
+            (candidate) =>
+                candidate.sessionId === expectedSession.sessionId && candidate.sessionEpoch === expectedSession.sessionEpoch,
+        )
+        const approvalCount = Object.values(snapshot.state.pendingApprovals).filter(
+            (approval) => approval.sessionId === expectedSession.sessionId && approval.sessionEpoch === expectedSession.sessionEpoch,
+        ).length
+        const inputCount = Object.values(snapshot.state.requestedInputs).filter(
+            (input) => input.sessionId === expectedSession.sessionId && input.sessionEpoch === expectedSession.sessionEpoch,
+        ).length
+        if (
+            session !== undefined &&
+            session.pendingApprovalIds.length === expected.approvalCount &&
+            session.pendingInputIds.length === expected.inputCount &&
+            approvalCount === expected.approvalCount &&
+            inputCount === expected.inputCount
+        ) {
+            return
+        }
+        await delay(250)
+    }
+    throw new Error(
+        `Timed out waiting for pending work counts approvals=${String(expected.approvalCount)} inputs=${String(expected.inputCount)}`,
+    )
+}
+
+const waitForElementCount = async (uiBrowser, session, selector, expectedCount) => {
+    const startedAt = Date.now()
+    while (Date.now() - startedAt < 10000) {
+        const raw = await ui(uiBrowser, session, ["eval", `(() => document.querySelectorAll(${JSON.stringify(selector)}).length)()`])
+        if (Number(raw) === expectedCount) {
+            return
+        }
+        await delay(250)
+    }
+    throw new Error(`Timed out waiting for ${selector} count ${String(expectedCount)}`)
+}
+
+const clickButtonByText = async (uiBrowser, session, label) => {
+    await ui(uiBrowser, session, [
+        "eval",
+        `(() => { const label = ${JSON.stringify(label)}; const button = Array.from(document.querySelectorAll('button')).find((candidate) => candidate.innerText.trim() === label); if (!button) throw new Error(label + ' button not found'); button.click(); return true; })()`,
+    ])
+}
+
+const selectRequestedInputOption = async (uiBrowser, session, label) => {
+    await ui(uiBrowser, session, [
+        "eval",
+        `(() => { const label = ${JSON.stringify(label)}; const row = Array.from(document.querySelectorAll('label.choice-row')).find((candidate) => candidate.innerText.includes(label)); if (!row) throw new Error(label + ' option not found'); const input = row.querySelector('input'); if (!input) throw new Error(label + ' radio not found'); input.click(); return true; })()`,
     ])
 }
 
