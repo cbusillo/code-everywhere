@@ -121,6 +121,9 @@ const run = async () => {
             state: continueOutcome.status,
             detail: continueOutcome.reason ?? "Claimed by Every Code",
         })
+        if (continueOutcome.status === "accepted") {
+            await waitForTuiIdleSession(brokerUrl, tuiSession)
+        }
 
         await stopProcess(broker)
         broker = null
