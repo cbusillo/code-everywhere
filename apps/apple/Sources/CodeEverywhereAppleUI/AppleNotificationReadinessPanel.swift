@@ -1,10 +1,17 @@
 import CodeEverywhereAppleCore
 import SwiftUI
+#if os(iOS)
+    import UIKit
+#endif
 
 public struct AppleNotificationReadinessPanel: View {
     private let permissionProvider: any CockpitNotificationPermissionProviding
 
+    @Environment(\.openURL) private var openURL
+    @Environment(\.scenePhase) private var scenePhase
+
     @State private var state = AppleNotificationReadinessPanelState.checking
+    @State private var permissionRequestGeneration = 0
 
     public init(permissionProvider: any CockpitNotificationPermissionProviding = UserNotificationPermissionProvider()) {
         self.permissionProvider = permissionProvider
@@ -29,6 +36,10 @@ public struct AppleNotificationReadinessPanel: View {
         .background(Color.secondary.opacity(0.05))
         .task {
             await refreshPermissionState()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            guard newPhase == .active else { return }
+            Task { await refreshPermissionState() }
         }
     }
 
@@ -55,28 +66,57 @@ public struct AppleNotificationReadinessPanel: View {
                     .controlSize(.small)
             }
             Button {
-                Task { await requestPermission() }
+                Task { await performPrimaryAction() }
             } label: {
-                Label("Enable", systemImage: "bell.badge")
+                Label(state.actionTitle, systemImage: state.actionSystemImage)
             }
-            .disabled(!state.canRequestPermission)
+            .disabled(!state.canPerformPrimaryAction)
         }
     }
 
     @MainActor
     private func refreshPermissionState() async {
+        let generation = permissionRequestGeneration
         state = .checking
-        state = .permission(await permissionProvider.currentPermissionState())
+        let permission = await permissionProvider.currentPermissionState()
+        guard generation == permissionRequestGeneration else { return }
+        state = .permission(permission)
     }
 
     @MainActor
     private func requestPermission() async {
+        permissionRequestGeneration += 1
         state = .requesting
         do {
             state = .permission(try await permissionProvider.requestPermission())
         } catch {
             state = .failed
         }
+    }
+
+    @MainActor
+    private func performPrimaryAction() async {
+        if state.shouldOpenSettings {
+            openNotificationSettings()
+            return
+        }
+
+        await requestPermission()
+    }
+
+    private func openNotificationSettings() {
+        guard let url = URL(string: Self.notificationSettingsURLString) else { return }
+        openURL(url)
+    }
+
+    private static var notificationSettingsURLString: String {
+        #if os(iOS)
+            UIApplication.openSettingsURLString
+        #elseif os(macOS)
+            "x-apple.systempreferences:com.apple.preference.notifications"
+        #else
+            ""
+        #endif
     }
 }
 
@@ -151,14 +191,27 @@ private enum AppleNotificationReadinessPanelState: Equatable {
         self == .checking || self == .requesting
     }
 
-    var canRequestPermission: Bool {
+    var canPerformPrimaryAction: Bool {
         switch self {
         case .permission(let permission):
-            return permission.authorization == .notDetermined
+            return permission.authorization == .notDetermined || permission.authorization == .denied
         case .failed:
             return true
         case .checking, .requesting:
             return false
         }
+    }
+
+    var shouldOpenSettings: Bool {
+        guard case let .permission(permission) = self else { return false }
+        return permission.authorization == .denied
+    }
+
+    var actionTitle: String {
+        shouldOpenSettings ? "Settings" : "Enable"
+    }
+
+    var actionSystemImage: String {
+        shouldOpenSettings ? "gearshape" : "bell.badge"
     }
 }
