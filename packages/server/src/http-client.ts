@@ -6,6 +6,7 @@ type FetchLike = typeof globalThis.fetch
 
 export type ClaimCockpitCommandsOptions = {
     sessionId?: string
+    authToken?: string
     fetch?: FetchLike
 }
 
@@ -19,6 +20,7 @@ export const claimCockpitCommands = async (
         headers: {
             accept: "application/json",
             "content-type": "application/json",
+            ...createAuthHeaders(options.authToken),
         },
         body: JSON.stringify(options.sessionId === undefined ? {} : { sessionId: options.sessionId }),
     })
@@ -39,6 +41,7 @@ export const postCockpitEvents = async (
     transportUrl: string,
     events: CockpitProjectionEvent | CockpitProjectionEvent[],
     fetchImpl: FetchLike = globalThis.fetch,
+    authToken?: string,
 ): Promise<CockpitIngestionSnapshot> => {
     const response = await fetchImpl(createCockpitEventsUrl(transportUrl), {
         method: "POST",
@@ -46,6 +49,7 @@ export const postCockpitEvents = async (
         headers: {
             accept: "application/json",
             "content-type": "application/json",
+            ...createAuthHeaders(authToken),
         },
         body: JSON.stringify(Array.isArray(events) ? { events } : { event: events }),
     })
@@ -65,6 +69,11 @@ export const postCockpitEvents = async (
 export const createCommandClaimUrl = (transportUrl: string): string => createLocalHttpUrl(transportUrl, "commands/claim")
 
 export const createCockpitEventsUrl = (transportUrl: string): string => createLocalHttpUrl(transportUrl, "events")
+
+const createAuthHeaders = (authToken: string | undefined): Record<string, string> => {
+    const normalized = authToken?.trim()
+    return normalized === undefined || normalized === "" ? {} : { authorization: `Bearer ${normalized}` }
+}
 
 const createLocalHttpUrl = (transportUrl: string, path: string): string => {
     const url = new URL(transportUrl)

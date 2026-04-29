@@ -9,6 +9,7 @@ export type CockpitServerCliOptions = {
     host: string
     port: number
     dataFile: string | null
+    authToken: string | null
     help: boolean
 }
 
@@ -26,12 +27,13 @@ export class CockpitServerCliError extends Error {}
 export const formatCockpitServerHelp = (): string => `Code Everywhere cockpit HTTP server
 
 Usage:
-  pnpm cockpit:server [--host 127.0.0.1] [--port 4789] [--data-file .code-everywhere/cockpit-broker.json]
+  pnpm cockpit:server [--host 127.0.0.1] [--port 4789] [--data-file .code-everywhere/cockpit-broker.json] [--auth-token <token>]
 
 Options:
   --host <host>            Bind address. Defaults to CODE_EVERYWHERE_HOST or ${defaultHost}.
   --port <port>            Bind port. Defaults to CODE_EVERYWHERE_PORT or ${String(defaultPort)}.
   --data-file <path>       Persistence file. Defaults to CODE_EVERYWHERE_DATA_FILE or ${defaultDataFile}.
+  --auth-token <token>      Require token auth. Defaults to CODE_EVERYWHERE_AUTH_TOKEN.
   --memory                 Disable file persistence for this run.
   -h, --help               Show this help.
 `
@@ -42,6 +44,7 @@ export const parseCockpitServerArgs = (args: readonly string[], variables: NodeJ
             host: defaultHost,
             port: defaultPort,
             dataFile: defaultDataFile,
+            authToken: null,
             help: true,
         }
     }
@@ -49,6 +52,7 @@ export const parseCockpitServerArgs = (args: readonly string[], variables: NodeJ
     let host = normalizeHost(variables.CODE_EVERYWHERE_HOST) ?? defaultHost
     let port: number | undefined
     let dataFile: string | null = normalizeValue(variables.CODE_EVERYWHERE_DATA_FILE) ?? defaultDataFile
+    let authToken: string | null = normalizeValue(variables.CODE_EVERYWHERE_AUTH_TOKEN) ?? null
     let help = false
 
     for (let index = 0; index < args.length; index += 1) {
@@ -101,6 +105,17 @@ export const parseCockpitServerArgs = (args: readonly string[], variables: NodeJ
             continue
         }
 
+        if (arg === "--auth-token") {
+            authToken = readOptionValue(args, index, "--auth-token")
+            index += 1
+            continue
+        }
+
+        if (arg?.startsWith("--auth-token=")) {
+            authToken = requireNonEmptyValue(arg.slice("--auth-token=".length), "--auth-token")
+            continue
+        }
+
         throw new CockpitServerCliError(`Unknown option: ${arg ?? ""}`)
     }
 
@@ -108,6 +123,7 @@ export const parseCockpitServerArgs = (args: readonly string[], variables: NodeJ
         host,
         port: port ?? parsePort(variables.CODE_EVERYWHERE_PORT, "CODE_EVERYWHERE_PORT") ?? defaultPort,
         dataFile,
+        authToken,
         help,
     }
 }
@@ -121,11 +137,16 @@ export const cockpitServerUrl = (host: string, port: number): string => {
 }
 
 export const startCockpitHttpServer = async (
-    options: Pick<CockpitServerCliOptions, "host" | "port"> & { dataFile?: string | null },
+    options: Pick<CockpitServerCliOptions, "host" | "port"> & { authToken?: string | null; dataFile?: string | null },
 ): Promise<RunningCockpitServer> => {
+    const authToken = normalizeValue(options.authToken ?? undefined) ?? null
+    if (!isLoopbackHost(options.host) && authToken === null) {
+        throw new CockpitServerCliError("--auth-token or CODE_EVERYWHERE_AUTH_TOKEN is required when binding beyond loopback")
+    }
+
     const stores =
         options.dataFile === undefined || options.dataFile === null ? undefined : createPersistentCockpitStores(options.dataFile)
-    const server = createCockpitHttpServer(stores)
+    const server = createCockpitHttpServer({ ...(stores ?? {}), authToken })
     await new Promise<void>((resolve, reject) => {
         const onError = (error: Error) => {
             server.off("listening", onListening)
@@ -167,6 +188,9 @@ export const runCockpitServerCli = async (
         if (options.dataFile !== null) {
             stdout.write(`Persisting broker state to ${options.dataFile}\n`)
         }
+        if (options.authToken !== null) {
+            stdout.write("Broker auth token enabled.\n")
+        }
         stdout.write(`Use VITE_COCKPIT_HTTP_URL=${running.url} for the web cockpit.\n`)
         return 0
     } catch (error: unknown) {
@@ -182,6 +206,11 @@ const normalizeHost = (host: string | undefined): string | undefined => {
 const normalizeValue = (value: string | undefined): string | undefined => {
     const normalized = value?.trim()
     return normalized === undefined || normalized === "" ? undefined : normalized
+}
+
+const isLoopbackHost = (host: string): boolean => {
+    const normalized = host.trim().toLowerCase()
+    return normalized === "localhost" || normalized === "::1" || normalized === "[::1]" || normalized.startsWith("127.")
 }
 
 const readOptionValue = (args: readonly string[], index: number, option: string): string =>

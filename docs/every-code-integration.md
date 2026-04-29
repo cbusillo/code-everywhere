@@ -63,6 +63,10 @@ Every Code adapter that consumes them:
 - the broker persists local state to `.code-everywhere/cockpit-broker.json` by
   default; pass `--memory` for an ephemeral run or `--data-file <path>` to use a
   different file
+- loopback-only broker usage remains tokenless by default for local development
+- when `--auth-token <token>` or `CODE_EVERYWHERE_AUTH_TOKEN` is set, all broker
+  routes require `Authorization: Bearer <token>` or `X-Code-Everywhere-Token`
+- binding beyond loopback, such as `--host 0.0.0.0`, requires an auth token
 - web and native clients enqueue operator actions with `POST /commands`
 - local adapters claim undelivered work with `POST /commands/claim`
 - `POST /commands/claim` accepts an optional `sessionId` filter and marks
@@ -73,6 +77,8 @@ Every Code adapter that consumes them:
   from `@code-everywhere/server/http-client`
 - adapter code should publish session events with the typed `postCockpitEvents`
   helper exported from the same module
+- web clients pass broker auth with `VITE_COCKPIT_AUTH_TOKEN` when the broker is
+  started with a token
 
 The Every Code HTTP remote-inbox adapter claims commands for its active
 `sessionId`, translates `SessionCommand` values into the runtime's existing
