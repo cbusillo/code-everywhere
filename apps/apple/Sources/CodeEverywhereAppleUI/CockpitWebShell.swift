@@ -14,6 +14,7 @@ public struct CockpitWebShell: View {
     public var body: some View {
         VStack(spacing: 0) {
             AppleDeviceTrustRegistrationPanel(settings: settings)
+            AppleNotificationReadinessPanel()
             Divider()
             CockpitWebView(url: shellURL)
         }
