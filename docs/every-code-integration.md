@@ -29,6 +29,47 @@ Important existing concepts:
 - Discord can remain a projection/adapter, but it should not be the only product surface.
 - The protocol should support web and Apple-native clients without duplicating session logic.
 
+## Trust And Identity Model
+
+Broker authorization is not product identity. `--auth-token`,
+`CODE_EVERYWHERE_AUTH_TOKEN`, `VITE_COCKPIT_AUTH_TOKEN`, bearer auth, and
+`X-Code-Everywhere-Token` only decide whether a caller may use broker HTTP
+routes. They do not identify a durable host, operator, device, or Every Code
+session by themselves.
+
+Code Everywhere should use separate identity concepts:
+
+- **Broker authority**: permission to call local broker routes. Today this is
+  loopback-only by default, or a configured shared token when protected or bound
+  beyond loopback.
+- **Host identity**: the machine or runtime installation that launches trusted
+  Every Code sessions. Current projections expose only `hostLabel`, cwd, branch,
+  pid, and model; there is no durable `hostId` yet.
+- **Session identity**: the runtime session represented by `sessionId` and the
+  reconnect/staleness scope represented by `sessionEpoch`. Commands and pending
+  work must keep using both values.
+- **Operator identity**: the human or account allowed to act from a client. The
+  web cockpit does not model this yet; future native or relay modes should add it
+  before multi-user or remote operation.
+- **Device identity**: a trusted web/native client installation. Device trust is
+  distinct from host trust: a phone may operate several trusted hosts, and a host
+  may publish sessions without being the operator device.
+
+The product rule is automatic trusted-session appearance: once a host and
+operator/device trust boundary exists, sessions from that trusted host should
+appear without per-session pairing. Pairing every transient session would fight
+the Every Code workflow and should remain a diagnostic or recovery path, not the
+default interaction model.
+
+Before LAN, hosted relay, or Apple notification work, the missing durable fields
+to evaluate are:
+
+- a stable host identifier separate from human-readable `hostLabel`
+- an operator/account identifier for clients that can enqueue commands
+- a device identifier for native clients and notification routing
+- a storage shape for trusted hosts/devices that is not just the broker auth
+  token
+
 ## What Not To Port
 
 Avoid carrying Discord-specific concepts into the core model:
