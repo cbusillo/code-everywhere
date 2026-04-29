@@ -7,8 +7,11 @@ import {
     getRequestedInputAnswers,
     getRequestedInputAnswerValues,
     getRequestedInputDefault,
+    getRequestedInputNoteValue,
+    requestedInputNoteQuestionId,
     setDraftValue,
     setRequestedInputAnswerValue,
+    setRequestedInputNoteValue,
 } from "./cockpitDrafts"
 
 describe("cockpit draft state", () => {
@@ -64,5 +67,12 @@ describe("cockpit draft state", () => {
             { questionId: "question-1", value: "recommended" },
             { questionId: "question-2", value: "project" },
         ])
+        expect(getRequestedInputAnswers(input, values, "  Add CI evidence.  ")).toEqual([
+            { questionId: "question-1", value: "recommended" },
+            { questionId: "question-2", value: "project" },
+            { questionId: requestedInputNoteQuestionId, value: "Add CI evidence." },
+        ])
+        expect(getRequestedInputNoteValue(setRequestedInputNoteValue({}, "input-1", "note text"), input)).toBe("note text")
+        expect(getRequestedInputNoteValue({}, undefined)).toBe("")
     })
 })

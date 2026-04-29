@@ -41,8 +41,10 @@ import {
     getDraftValue,
     getRequestedInputAnswers,
     getRequestedInputAnswerValues,
+    getRequestedInputNoteValue,
     setDraftValue,
     setRequestedInputAnswerValue,
+    setRequestedInputNoteValue,
     type DraftMap,
 } from "./cockpitDrafts"
 import { describeTransportStatus, useCockpitView, type CockpitTransportStatus } from "./cockpitTransport"
@@ -132,6 +134,7 @@ export const App = () => {
     const activeCommandHistory = getCommandHistoryEntries(cockpit.commands, cockpit.commandOutcomes, activeSession)
     const reply = getDraftValue(replyDrafts, activeSession?.sessionId)
     const inputAnswerValues = getRequestedInputAnswerValues(inputAnswerDrafts, activeInput)
+    const inputNote = getRequestedInputNoteValue(inputAnswerDrafts, activeInput)
 
     const setReply = (value: string) => {
         if (activeSession === undefined) {
@@ -147,6 +150,14 @@ export const App = () => {
         }
 
         setInputAnswerDrafts((drafts) => setRequestedInputAnswerValue(drafts, activeInput.id, questionId, value))
+    }
+
+    const setInputNote = (value: string) => {
+        if (activeInput === undefined) {
+            return
+        }
+
+        setInputAnswerDrafts((drafts) => setRequestedInputNoteValue(drafts, activeInput.id, value))
     }
 
     const dispatchCommand = (label: string, command: SessionCommand) => {
@@ -213,7 +224,9 @@ export const App = () => {
                                 approval={activeApproval}
                                 requestedInput={activeInput}
                                 inputAnswerValues={inputAnswerValues}
+                                inputNote={inputNote}
                                 setInputAnswer={setInputAnswer}
+                                setInputNote={setInputNote}
                                 commandLog={commandLog}
                                 commandHistory={activeCommandHistory}
                                 dispatchCommand={dispatchCommand}
@@ -419,7 +432,9 @@ type ActionRailProps = {
     approval: PendingApproval | undefined
     requestedInput: RequestedInput | undefined
     inputAnswerValues: Record<string, string>
+    inputNote: string
     setInputAnswer: (questionId: string, value: string) => void
+    setInputNote: (value: string) => void
     commandLog: string
     commandHistory: CommandHistoryEntry[]
     dispatchCommand: (label: string, command: SessionCommand) => void
@@ -430,7 +445,9 @@ const ActionRail = ({
     approval,
     requestedInput,
     inputAnswerValues,
+    inputNote,
     setInputAnswer,
+    setInputNote,
     commandLog,
     commandHistory,
     dispatchCommand,
@@ -457,7 +474,9 @@ const ActionRail = ({
                 <RequestedInputCard
                     input={requestedInput}
                     values={inputAnswerValues}
+                    note={inputNote}
                     setValue={setInputAnswer}
+                    setNote={setInputNote}
                     dispatchCommand={dispatchCommand}
                 />
             )}
@@ -560,11 +579,13 @@ const ApprovalCard = ({
 type RequestedInputCardProps = {
     input: RequestedInput
     values: Record<string, string>
+    note: string
     setValue: (questionId: string, value: string) => void
+    setNote: (value: string) => void
     dispatchCommand: (label: string, command: SessionCommand) => void
 }
 
-const RequestedInputCard = ({ input, values, setValue, dispatchCommand }: RequestedInputCardProps) => {
+const RequestedInputCard = ({ input, values, note, setValue, setNote, dispatchCommand }: RequestedInputCardProps) => {
     if (input.questions.length === 0) {
         return null
     }
@@ -601,7 +622,12 @@ const RequestedInputCard = ({ input, values, setValue, dispatchCommand }: Reques
             <label className="freeform-label" htmlFor="input-freeform">
                 Optional note
             </label>
-            <textarea id="input-freeform" placeholder="Add context for the session..." />
+            <textarea
+                id="input-freeform"
+                placeholder="Add context for the session..."
+                value={note}
+                onChange={(event) => setNote(event.currentTarget.value)}
+            />
             <button
                 className="primary-button full-width"
                 type="button"
@@ -612,7 +638,7 @@ const RequestedInputCard = ({ input, values, setValue, dispatchCommand }: Reques
                         sessionEpoch: input.sessionEpoch,
                         inputId: input.id,
                         turnId: input.turnId,
-                        answers: getRequestedInputAnswers(input, values),
+                        answers: getRequestedInputAnswers(input, values, note),
                     })
                 }
             >

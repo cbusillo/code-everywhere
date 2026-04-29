@@ -10,6 +10,7 @@ import { setTimeout as delay } from "node:timers/promises"
 
 const smokePollIntervalMs = 500
 const processLogs = new WeakMap()
+const requestedInputSmokeNote = "Freeform note from the real TUI smoke."
 const pendingWorkSmokeEnabled = () =>
     ["1", "true", "yes", "on"].includes(
         String(process.env.CODE_EVERYWHERE_SMOKE_PENDING_WORK ?? "")
@@ -418,7 +419,9 @@ const runPendingWorkSmoke = async (uiBrowser, session, brokerUrl, tuiSession) =>
     await waitForElementCount(uiBrowser, session, ".input-card", 1)
 
     await selectRequestedInputOption(uiBrowser, session, "Continue (Recommended)")
+    await fillRequestedInputNote(uiBrowser, session, requestedInputSmokeNote)
     await clickButtonByText(uiBrowser, session, "Submit input")
+    await waitForSubmittedInputAnswer(brokerUrl, tuiSession, "__note", requestedInputSmokeNote)
     const inputOutcome = await waitForCommandOutcome(brokerUrl, "request_user_input_response", tuiSession)
     assertEqual(inputOutcome.status, "accepted", "request_user_input response outcome")
     assertEqual(inputOutcome.sessionId, tuiSession.sessionId, "request_user_input response session")
@@ -486,6 +489,32 @@ const selectRequestedInputOption = async (uiBrowser, session, label) => {
         "eval",
         `(() => { const label = ${JSON.stringify(label)}; const row = Array.from(document.querySelectorAll('label.choice-row')).find((candidate) => candidate.innerText.includes(label)); if (!row) throw new Error(label + ' option not found'); const input = row.querySelector('input'); if (!input) throw new Error(label + ' radio not found'); input.click(); return true; })()`,
     ])
+}
+
+const fillRequestedInputNote = async (uiBrowser, session, note) => {
+    await ui(uiBrowser, session, [
+        "eval",
+        `(() => { const textarea = document.querySelector('#input-freeform'); if (!textarea) throw new Error('Input note textarea not found'); const value = ${JSON.stringify(note)}; const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set; setter.call(textarea, value); textarea.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`,
+    ])
+}
+
+const waitForSubmittedInputAnswer = async (brokerUrl, expectedSession, questionId, value) => {
+    const startedAt = Date.now()
+    while (Date.now() - startedAt < 10000) {
+        const snapshot = await getJson(`${brokerUrl}/commands`)
+        const command = snapshot.commands.find(
+            (record) =>
+                record.command.kind === "request_user_input_response" &&
+                record.command.sessionId === expectedSession.sessionId &&
+                record.command.sessionEpoch === expectedSession.sessionEpoch,
+        )?.command
+        const answer = command?.answers?.find((candidate) => candidate.questionId === questionId)
+        if (answer?.value === value) {
+            return
+        }
+        await delay(250)
+    }
+    throw new Error(`Timed out waiting for submitted requested-input answer ${questionId}`)
 }
 
 const sendReply = async (uiBrowser, session, message) => {
