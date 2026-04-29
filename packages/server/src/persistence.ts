@@ -9,6 +9,7 @@ import {
     type CockpitCommandRecord,
     type CockpitCommandStore,
     type CockpitEventStore,
+    type CockpitEventStoreOptions,
 } from "./index.js"
 import { isCockpitProjectionEvent, isSessionCommand } from "./http.js"
 import { compactCockpitEvents, defaultCockpitEventRetentionPolicy, type CockpitEventRetentionPolicy } from "./retention.js"
@@ -27,6 +28,7 @@ export type PersistentCockpitStores = {
 export type CockpitPersistenceOptions = {
     writeSnapshot?: (filePath: string, snapshot: CockpitPersistenceSnapshot) => void
     eventRetentionPolicy?: CockpitEventRetentionPolicy | null
+    eventStoreOptions?: CockpitEventStoreOptions
 }
 
 export class CockpitPersistenceError extends Error {}
@@ -45,11 +47,12 @@ export const createPersistentCockpitStores = (
     const eventRetentionPolicy =
         options.eventRetentionPolicy === undefined ? defaultCockpitEventRetentionPolicy : options.eventRetentionPolicy
     const snapshot = readCockpitPersistenceFile(filePath)
-    let eventStore = createCockpitEventStore(snapshot.events)
+    const eventStoreOptions = options.eventStoreOptions
+    let eventStore = createCockpitEventStore(snapshot.events, eventStoreOptions)
     let commandStore = createCockpitCommandStore([], { initialRecords: snapshot.commands })
 
     const restore = (previousSnapshot: CockpitPersistenceSnapshot): void => {
-        eventStore = createCockpitEventStore(previousSnapshot.events)
+        eventStore = createCockpitEventStore(previousSnapshot.events, eventStoreOptions)
         commandStore = createCockpitCommandStore([], { initialRecords: previousSnapshot.commands })
     }
 

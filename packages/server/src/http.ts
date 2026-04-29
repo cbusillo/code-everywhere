@@ -25,7 +25,12 @@ import {
     type CockpitEventStore,
     type CockpitIngestionSnapshot,
 } from "./index.js"
-import type { LocalTrustRegistryStore } from "./trust.js"
+import {
+    createLocalTrustRegistryStore,
+    type LocalHostTrustRecord,
+    type LocalTrustRegistrySnapshot,
+    type LocalTrustRegistryStore,
+} from "./trust.js"
 
 export type CockpitHttpHandlerOptions = {
     store?: CockpitEventStore
@@ -37,7 +42,12 @@ export type CockpitHttpHandlerOptions = {
 
 export type CockpitHttpServerOptions = CockpitHttpHandlerOptions
 
-type JsonResponse = CockpitIngestionSnapshot | CockpitCommandSnapshot | CockpitCommandClaim | { error: string }
+type JsonResponse =
+    | CockpitIngestionSnapshot
+    | CockpitCommandSnapshot
+    | CockpitCommandClaim
+    | LocalTrustRegistrySnapshot
+    | { error: string }
 
 const defaultMaxBodyBytes = 1024 * 1024
 const sessionStatusValues = [
@@ -75,17 +85,15 @@ const sessionCommandKindValues = [
 const commandOutcomeStatusValues = ["accepted", "rejected"] as const satisfies readonly CommandOutcome["status"][]
 
 export const createCockpitHttpHandler = (options: CockpitHttpHandlerOptions = {}) => {
+    const trustStore = options.trustStore ?? createLocalTrustRegistryStore()
     const store =
-        options.store ??
-        (options.trustStore === undefined
-            ? createCockpitEventStore()
-            : createCockpitEventStore([], { trustStore: options.trustStore }))
+        options.store ?? (options.trustStore === undefined ? createCockpitEventStore() : createCockpitEventStore([], { trustStore }))
     const commandStore = options.commandStore ?? createCockpitCommandStore()
     const maxBodyBytes = options.maxBodyBytes ?? defaultMaxBodyBytes
     const authToken = normalizeAuthToken(options.authToken)
 
     return (request: IncomingMessage, response: ServerResponse): void => {
-        void routeRequest(request, response, store, commandStore, maxBodyBytes, authToken).catch((error: unknown) => {
+        void routeRequest(request, response, store, commandStore, trustStore, maxBodyBytes, authToken).catch((error: unknown) => {
             if (error instanceof HttpInputError) {
                 writeJson(response, error.statusCode, { error: error.message })
                 return
@@ -104,6 +112,7 @@ const routeRequest = async (
     response: ServerResponse,
     store: CockpitEventStore,
     commandStore: CockpitCommandStore,
+    trustStore: LocalTrustRegistryStore,
     maxBodyBytes: number,
     authToken: string | null,
 ): Promise<void> => {
@@ -186,6 +195,50 @@ const routeRequest = async (
         }
 
         writeJson(response, 200, commandStore.enqueue(command))
+        return
+    }
+
+    if (url.pathname === "/trust") {
+        if (request.method !== "GET") {
+            writeMethodNotAllowed(response, "GET")
+            return
+        }
+
+        writeJson(response, 200, trustStore.getSnapshot())
+        return
+    }
+
+    if (url.pathname === "/trust/hosts") {
+        if (request.method !== "POST") {
+            writeMethodNotAllowed(response, "POST")
+            return
+        }
+
+        const body = await readJsonBody(request, maxBodyBytes)
+        const host = normalizeHostTrustPayload(body)
+        if (host === null) {
+            writeJson(response, 400, { error: "Expected one local host trust record" })
+            return
+        }
+
+        writeJson(response, 200, trustStore.upsertHost(host))
+        return
+    }
+
+    if (url.pathname === "/trust/hosts/revoke") {
+        if (request.method !== "POST") {
+            writeMethodNotAllowed(response, "POST")
+            return
+        }
+
+        const body = await readJsonBody(request, maxBodyBytes)
+        const payload = normalizeHostRevokePayload(body)
+        if (payload === null) {
+            writeJson(response, 400, { error: "Expected hostId and revokedAt strings" })
+            return
+        }
+
+        writeJson(response, 200, trustStore.revokeHost(payload.hostId, payload.revokedAt))
         return
     }
 
@@ -332,6 +385,26 @@ const normalizeCommandClaimPayload = (payload: unknown): { sessionId?: string } 
     return null
 }
 
+const normalizeHostTrustPayload = (payload: unknown): LocalHostTrustRecord | null => {
+    const host = isRecord(payload) && "host" in payload ? payload.host : payload
+    if (!isHostTrustRecord(host)) {
+        return null
+    }
+
+    return { ...host }
+}
+
+const normalizeHostRevokePayload = (payload: unknown): { hostId: string; revokedAt: string } | null => {
+    if (!isRecord(payload) || !hasString(payload, "hostId") || !hasString(payload, "revokedAt")) {
+        return null
+    }
+
+    return {
+        hostId: String(payload.hostId),
+        revokedAt: String(payload.revokedAt),
+    }
+}
+
 const selectCommandPayload = (payload: unknown): unknown => {
     if (isRecord(payload) && "command" in payload) {
         return payload.command
@@ -339,6 +412,14 @@ const selectCommandPayload = (payload: unknown): unknown => {
 
     return payload
 }
+
+const isHostTrustRecord = (value: unknown): value is LocalHostTrustRecord =>
+    isRecord(value) &&
+    hasString(value, "hostId") &&
+    hasString(value, "label") &&
+    hasString(value, "createdAt") &&
+    hasNullableString(value, "lastSeenAt") &&
+    hasEnum(value, "status", ["trusted", "revoked"] as const)
 
 export const isSessionCommand = (value: unknown): value is SessionCommand => {
     if (!isRecord(value) || typeof value.kind !== "string") {

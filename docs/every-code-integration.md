@@ -134,6 +134,9 @@ Every Code adapter that consumes them:
   helper exported from the same module
 - `/snapshot` returns projected sessions with `trust.status`; route auth tokens
   authorize broker access but never mark a session trusted
+- local trust records can be inspected with `GET /trust`; trusted host records
+  can be upserted with `POST /trust/hosts`, and hosts can be revoked with
+  `POST /trust/hosts/revoke`
 - web clients pass broker auth with `VITE_COCKPIT_AUTH_TOKEN` when the broker is
   started with a token
 
