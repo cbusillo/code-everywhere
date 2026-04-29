@@ -1,4 +1,4 @@
-import type { LocalHostTrustRecord, LocalTrustRegistrySnapshot } from "@code-everywhere/server/trust"
+import type { LocalDeviceTrustRecord, LocalHostTrustRecord, LocalTrustRegistrySnapshot } from "@code-everywhere/server/trust"
 
 import type { CockpitSession } from "./cockpitData"
 import type { CockpitTransportStatus } from "./cockpitTransport"
@@ -60,6 +60,26 @@ export const postRevokedHostId = async (
     }
 
     return postTrustJson(transportUrl, "hosts/revoke", { hostId: normalizedHostId, revokedAt: now().toISOString() }, fetchImpl)
+}
+
+export const postTrustedDevice = async (
+    transportUrl: string,
+    device: LocalDeviceTrustRecord,
+    fetchImpl: FetchLike = globalThis.fetch,
+): Promise<LocalTrustRegistrySnapshot> => postTrustJson(transportUrl, "devices", { device }, fetchImpl)
+
+export const postRevokedDeviceId = async (
+    transportUrl: string,
+    deviceId: string,
+    now: () => Date = () => new Date(),
+    fetchImpl: FetchLike = globalThis.fetch,
+): Promise<LocalTrustRegistrySnapshot> => {
+    const normalizedDeviceId = deviceId.trim()
+    if (normalizedDeviceId === "") {
+        throw new Error("Device id is required")
+    }
+
+    return postTrustJson(transportUrl, "devices/revoke", { deviceId: normalizedDeviceId, revokedAt: now().toISOString() }, fetchImpl)
 }
 
 export const fetchLocalTrustRegistry = async (
@@ -138,12 +158,21 @@ const isLocalTrustRegistrySnapshot = (value: unknown): value is LocalTrustRegist
     value.version === 1 &&
     (value.operator === null || isRecord(value.operator)) &&
     isArrayOf(value.hosts, isHostTrustRecord) &&
-    Array.isArray(value.devices)
+    isArrayOf(value.devices, isDeviceTrustRecord)
 
 const isHostTrustRecord = (value: unknown): value is LocalHostTrustRecord =>
     isRecord(value) &&
     typeof value.hostId === "string" &&
     typeof value.label === "string" &&
+    typeof value.createdAt === "string" &&
+    (value.lastSeenAt === null || typeof value.lastSeenAt === "string") &&
+    (value.status === "trusted" || value.status === "revoked")
+
+const isDeviceTrustRecord = (value: unknown): value is LocalDeviceTrustRecord =>
+    isRecord(value) &&
+    typeof value.deviceId === "string" &&
+    typeof value.label === "string" &&
+    (value.platform === undefined || typeof value.platform === "string") &&
     typeof value.createdAt === "string" &&
     (value.lastSeenAt === null || typeof value.lastSeenAt === "string") &&
     (value.status === "trusted" || value.status === "revoked")

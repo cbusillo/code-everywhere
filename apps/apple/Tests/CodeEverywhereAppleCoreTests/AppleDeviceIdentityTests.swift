@@ -59,6 +59,37 @@ struct AppleDeviceIdentityTests {
         #expect(defaults.dictionaryRepresentation().keys.allSatisfy { !$0.localizedCaseInsensitiveContains("secret") })
     }
 
+    @Test("creates broker device trust registration payloads")
+    func createsTrustRegistrationPayloads() throws {
+        let identity = AppleDeviceIdentity(
+            deviceId: "apple-device-1",
+            displayName: "Casey's iPad",
+            platform: "apple",
+            createdAt: Date(timeIntervalSince1970: 100),
+            lastSeenAt: Date(timeIntervalSince1970: 200)
+        )
+
+        #expect(identity.trustRegistrationPayload() == AppleDeviceTrustRegistrationPayload(device: AppleDeviceTrustRecord(
+            deviceId: "apple-device-1",
+            label: "Casey's iPad",
+            platform: "apple",
+            createdAt: Date(timeIntervalSince1970: 100),
+            lastSeenAt: Date(timeIntervalSince1970: 200),
+            status: .trusted
+        )))
+
+        let data = try identity.trustRegistrationPayload().brokerJSONData()
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let device = json?["device"] as? [String: Any]
+
+        #expect(device?["deviceId"] as? String == "apple-device-1")
+        #expect(device?["label"] as? String == "Casey's iPad")
+        #expect(device?["platform"] as? String == "apple")
+        #expect(device?["createdAt"] as? String == "1970-01-01T00:01:40Z")
+        #expect(device?["lastSeenAt"] as? String == "1970-01-01T00:03:20Z")
+        #expect(device?["status"] as? String == "trusted")
+    }
+
     @Test("clears the local identity")
     func clearsIdentity() throws {
         let store = AppleDeviceIdentityStore(defaults: makeDefaults(), namespace: "clear")

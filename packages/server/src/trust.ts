@@ -22,6 +22,7 @@ export type LocalHostTrustRecord = {
 export type LocalDeviceTrustRecord = {
     deviceId: string
     label: string
+    platform?: string
     createdAt: string
     lastSeenAt: string | null
     status: LocalTrustRecordStatus
@@ -212,6 +213,7 @@ const isDeviceTrustRecord = (value: unknown): value is LocalDeviceTrustRecord =>
     isRecord(value) &&
     isString(value.deviceId) &&
     isString(value.label) &&
+    (value.platform === undefined || isString(value.platform)) &&
     isString(value.createdAt) &&
     isNullableString(value.lastSeenAt) &&
     isTrustRecordStatus(value.status)

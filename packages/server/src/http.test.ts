@@ -217,7 +217,7 @@ describe("cockpit HTTP transport", () => {
         }
     })
 
-    it("manages trusted host records through local trust routes", async () => {
+    it("manages trusted host and device records through local trust routes", async () => {
         const trustStore = createLocalTrustRegistryStore()
         const trustServer = createCockpitHttpServer({ trustStore })
         let trustBaseUrl: string
@@ -264,6 +264,33 @@ describe("cockpit HTTP transport", () => {
                     hosts: [{ ...host, lastSeenAt: "2026-04-29T19:45:00.000Z", status: "revoked" }],
                 },
             })
+
+            const device = {
+                deviceId: "apple-device-1",
+                label: "Casey's iPad",
+                platform: "apple",
+                createdAt: "2026-04-29T19:46:00.000Z",
+                lastSeenAt: "2026-04-29T19:47:00.000Z",
+                status: "trusted",
+            }
+            await expect(sendJson(trustBaseUrl, "POST", "/trust/devices", { device })).resolves.toMatchObject({
+                statusCode: 200,
+                body: {
+                    devices: [device],
+                },
+            })
+
+            await expect(
+                sendJson(trustBaseUrl, "POST", "/trust/devices/revoke", {
+                    deviceId: "apple-device-1",
+                    revokedAt: "2026-04-29T19:48:00.000Z",
+                }),
+            ).resolves.toMatchObject({
+                statusCode: 200,
+                body: {
+                    devices: [{ ...device, lastSeenAt: "2026-04-29T19:48:00.000Z", status: "revoked" }],
+                },
+            })
         } finally {
             await new Promise<void>((resolve) => trustServer.close(() => resolve()))
         }
@@ -277,6 +304,14 @@ describe("cockpit HTTP transport", () => {
         await expect(sendJson(baseUrl, "POST", "/trust/hosts/revoke", { hostId: "host-workhorse" })).resolves.toMatchObject({
             statusCode: 400,
             body: { error: "Expected hostId and revokedAt strings" },
+        })
+        await expect(sendJson(baseUrl, "POST", "/trust/devices", { deviceId: "apple-device-1" })).resolves.toMatchObject({
+            statusCode: 400,
+            body: { error: "Expected one local device trust record" },
+        })
+        await expect(sendJson(baseUrl, "POST", "/trust/devices/revoke", { deviceId: "apple-device-1" })).resolves.toMatchObject({
+            statusCode: 400,
+            body: { error: "Expected deviceId and revokedAt strings" },
         })
         await expect(sendJson(baseUrl, "PUT", "/trust", {})).resolves.toMatchObject({
             statusCode: 405,
