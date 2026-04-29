@@ -12,6 +12,7 @@
         "lint": "eslint .",
         "lint:dry-run": "eslint . --fix-dry-run",
         "smoke:cockpit:real-tui": "node scripts/smoke-cockpit-real-tui-live-loop.mjs",
+        "smoke:cockpit:real-tui:pending-work": "CODE_EVERYWHERE_SMOKE_PENDING_WORK=1 node scripts/smoke-cockpit-real-tui-live-loop.mjs",
         "smoke:cockpit:retained-pruned": "node scripts/smoke-cockpit-retained-pruned-browser.mjs",
         "smoke:cockpit:turns": "node scripts/smoke-cockpit-turn-lifecycle.mjs",
         "smoke:cockpit:web": "node scripts/smoke-cockpit-web-live-loop.mjs",

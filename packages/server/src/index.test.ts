@@ -279,6 +279,7 @@ describe("cockpit command store", () => {
             kind: "request_user_input_response",
             sessionId: "session-1",
             sessionEpoch: "epoch-1",
+            inputId: "input-1",
             turnId: "turn-1",
             answers: [
                 {
@@ -306,6 +307,7 @@ describe("cockpit command store", () => {
         const freshCommand = store.getSnapshot().commands[0]?.command
         expect(store.getSnapshot().commandCount).toBe(1)
         expect(freshCommand?.kind).toBe("request_user_input_response")
+        expect(freshCommand?.kind === "request_user_input_response" ? freshCommand.inputId : null).toBe("input-1")
         expect(freshCommand?.kind === "request_user_input_response" ? freshCommand.answers : []).toEqual([
             {
                 questionId: "question-1",

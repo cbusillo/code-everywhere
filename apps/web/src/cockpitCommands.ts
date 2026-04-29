@@ -87,7 +87,12 @@ const isSessionCommand = (value: unknown): value is SessionCommand => {
         case "approval_decision":
             return hasCommandScope(value) && typeof value.approvalId === "string" && isOneOf(value.decision, ["approve", "deny"])
         case "request_user_input_response":
-            return hasCommandScope(value) && typeof value.turnId === "string" && isArrayOf(value.answers, isRequestedInputAnswer)
+            return (
+                hasCommandScope(value) &&
+                (!Object.prototype.hasOwnProperty.call(value, "inputId") || typeof value.inputId === "string") &&
+                typeof value.turnId === "string" &&
+                isArrayOf(value.answers, isRequestedInputAnswer)
+            )
         default:
             return false
     }

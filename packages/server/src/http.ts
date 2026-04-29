@@ -317,6 +317,7 @@ export const isSessionCommand = (value: unknown): value is SessionCommand => {
         case "request_user_input_response":
             return (
                 hasCommandScope(value) &&
+                (!Object.prototype.hasOwnProperty.call(value, "inputId") || hasString(value, "inputId")) &&
                 hasString(value, "turnId") &&
                 Array.isArray(value.answers) &&
                 value.answers.every(isRequestedInputAnswer)

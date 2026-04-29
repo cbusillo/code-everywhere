@@ -610,6 +610,7 @@ const RequestedInputCard = ({ input, values, setValue, dispatchCommand }: Reques
                         kind: "request_user_input_response",
                         sessionId: input.sessionId,
                         sessionEpoch: input.sessionEpoch,
+                        inputId: input.id,
                         turnId: input.turnId,
                         answers: getRequestedInputAnswers(input, values),
                     })
