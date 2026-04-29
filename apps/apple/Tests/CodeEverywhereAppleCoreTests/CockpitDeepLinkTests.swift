@@ -26,6 +26,11 @@ struct CockpitDeepLinkTests {
         #expect(parser.parse(try #require(URL(string: "code-everywhere://settings"))) == nil)
     }
 
+    @Test("rejects duplicate query keys without trapping")
+    func rejectsDuplicateQueryKeys() throws {
+        #expect(parser.parse(try #require(URL(string: "code-everywhere://session/session-123?pending=one&pending=two"))) == nil)
+    }
+
     @Test("creates web fragments for shared cockpit routing")
     func createsWebFragments() {
         #expect(parser.webFragment(for: .session(sessionId: "session-123", pendingItemId: "approval-9")) == "/session/session-123?pending=approval-9")

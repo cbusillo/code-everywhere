@@ -77,6 +77,11 @@ type CockpitStateSurface = {
     detail: string
 }
 
+type CockpitFragmentRoute = {
+    sessionId: string | null
+    pendingItemId: string | null
+}
+
 type TrustRegistryState = {
     snapshot: LocalTrustRegistrySnapshot | null
     status: "unavailable" | "loading" | "ready" | "error"
@@ -184,8 +189,9 @@ const attentionIcon: Record<OperatorAttentionKind, IconComponent> = {
 export const App = () => {
     const cockpitView = useCockpitView()
     const cockpit = cockpitView.fixture
-    const [activeSessionId, setActiveSessionId] = useState(selectedSessionId)
-    const [activePendingItemId, setActivePendingItemId] = useState<string | null>(null)
+    const initialRoute = getCurrentCockpitFragmentRoute()
+    const [activeSessionId, setActiveSessionId] = useState(initialRoute?.sessionId ?? selectedSessionId)
+    const [activePendingItemId, setActivePendingItemId] = useState<string | null>(initialRoute?.pendingItemId ?? null)
     const [replyDrafts, setReplyDrafts] = useState<DraftMap>({})
     const [inputAnswerDrafts, setInputAnswerDrafts] = useState<DraftMap>({})
     const [commandLog, setCommandLog] = useState("No command sent yet")
@@ -218,6 +224,24 @@ export const App = () => {
     const reply = getDraftValue(replyDrafts, activeSession?.sessionId)
     const inputAnswerValues = getRequestedInputAnswerValues(inputAnswerDrafts, activeInput)
     const inputNote = getRequestedInputNoteValue(inputAnswerDrafts, activeInput)
+
+    useEffect(() => {
+        const handleHashChange = () => {
+            const route = getCurrentCockpitFragmentRoute()
+            if (route === null) {
+                return
+            }
+            if (route.sessionId !== null) {
+                setActiveSessionId(route.sessionId)
+            }
+            setActivePendingItemId(route.pendingItemId)
+        }
+
+        window.addEventListener("hashchange", handleHashChange)
+        return () => {
+            window.removeEventListener("hashchange", handleHashChange)
+        }
+    }, [])
 
     useEffect(() => {
         if (!canManageTrust(cockpitView.transport)) {
@@ -1245,6 +1269,59 @@ const emptySessionDetailCopy = (transport: CockpitTransportStatus): string => {
             return transport.error === null
                 ? "The cockpit is showing the last known snapshot because the local broker is unavailable."
                 : `The cockpit is showing the last known snapshot because the local broker is unavailable: ${transport.error}`
+    }
+}
+
+export const parseCockpitFragmentRoute = (hash: string): CockpitFragmentRoute | null => {
+    const fragment = hash.startsWith("#") ? hash.slice(1) : hash
+    if (fragment.trim() === "") {
+        return null
+    }
+
+    let url: URL
+    try {
+        url = new URL(
+            fragment.startsWith("/") ? `http://code-everywhere.local${fragment}` : `http://code-everywhere.local/${fragment}`,
+        )
+    } catch {
+        return null
+    }
+
+    const pathParts = url.pathname
+        .split("/")
+        .filter((part) => part !== "")
+        .map((part) => decodePathPart(part))
+
+    if (pathParts[0] === "session" && pathParts[1] !== undefined && pathParts[1].trim() !== "") {
+        return {
+            sessionId: pathParts[1],
+            pendingItemId: normalizeRouteValue(url.searchParams.get("pending")),
+        }
+    }
+
+    if (pathParts[0] === "pending" && pathParts[1] !== undefined && pathParts[1].trim() !== "") {
+        return {
+            sessionId: normalizeRouteValue(url.searchParams.get("session")),
+            pendingItemId: pathParts[1],
+        }
+    }
+
+    return null
+}
+
+const getCurrentCockpitFragmentRoute = (): CockpitFragmentRoute | null =>
+    typeof window === "undefined" ? null : parseCockpitFragmentRoute(window.location.hash)
+
+const normalizeRouteValue = (value: string | null): string | null => {
+    const normalized = value?.trim() ?? ""
+    return normalized === "" ? null : normalized
+}
+
+const decodePathPart = (value: string): string => {
+    try {
+        return decodeURIComponent(value)
+    } catch {
+        return value
     }
 }
 
