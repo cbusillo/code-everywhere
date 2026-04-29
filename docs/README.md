@@ -13,3 +13,9 @@ Start here when opening the repo.
 - [UI/UX Style](style/ui-ux.md) - cockpit design guardrails
 
 Decisions live in `docs/decisions/` once they become durable enough to record.
+
+Current durable decisions:
+
+- [0001 - Product Foundation](decisions/0001-product-foundation.md)
+- [0002 - Local Trust Persistence](decisions/0002-local-trust-persistence.md)
+- [0003 - Apple Client Shell](decisions/0003-apple-client-shell.md)
