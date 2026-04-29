@@ -27,6 +27,7 @@ import {
 } from "./index.js"
 import {
     createLocalTrustRegistryStore,
+    type LocalDeviceTrustRecord,
     type LocalHostTrustRecord,
     type LocalTrustRegistrySnapshot,
     type LocalTrustRegistryStore,
@@ -242,6 +243,40 @@ const routeRequest = async (
         return
     }
 
+    if (url.pathname === "/trust/devices") {
+        if (request.method !== "POST") {
+            writeMethodNotAllowed(response, "POST")
+            return
+        }
+
+        const body = await readJsonBody(request, maxBodyBytes)
+        const device = normalizeDeviceTrustPayload(body)
+        if (device === null) {
+            writeJson(response, 400, { error: "Expected one local device trust record" })
+            return
+        }
+
+        writeJson(response, 200, trustStore.upsertDevice(device))
+        return
+    }
+
+    if (url.pathname === "/trust/devices/revoke") {
+        if (request.method !== "POST") {
+            writeMethodNotAllowed(response, "POST")
+            return
+        }
+
+        const body = await readJsonBody(request, maxBodyBytes)
+        const payload = normalizeDeviceRevokePayload(body)
+        if (payload === null) {
+            writeJson(response, 400, { error: "Expected deviceId and revokedAt strings" })
+            return
+        }
+
+        writeJson(response, 200, trustStore.revokeDevice(payload.deviceId, payload.revokedAt))
+        return
+    }
+
     if (url.pathname === "/reset") {
         if (request.method !== "POST") {
             writeMethodNotAllowed(response, "POST")
@@ -394,6 +429,15 @@ const normalizeHostTrustPayload = (payload: unknown): LocalHostTrustRecord | nul
     return { ...host }
 }
 
+const normalizeDeviceTrustPayload = (payload: unknown): LocalDeviceTrustRecord | null => {
+    const device = isRecord(payload) && "device" in payload ? payload.device : payload
+    if (!isDeviceTrustRecord(device)) {
+        return null
+    }
+
+    return { ...device }
+}
+
 const normalizeHostRevokePayload = (payload: unknown): { hostId: string; revokedAt: string } | null => {
     if (!isRecord(payload) || !hasString(payload, "hostId") || !hasString(payload, "revokedAt")) {
         return null
@@ -401,6 +445,17 @@ const normalizeHostRevokePayload = (payload: unknown): { hostId: string; revoked
 
     return {
         hostId: String(payload.hostId),
+        revokedAt: String(payload.revokedAt),
+    }
+}
+
+const normalizeDeviceRevokePayload = (payload: unknown): { deviceId: string; revokedAt: string } | null => {
+    if (!isRecord(payload) || !hasString(payload, "deviceId") || !hasString(payload, "revokedAt")) {
+        return null
+    }
+
+    return {
+        deviceId: String(payload.deviceId),
         revokedAt: String(payload.revokedAt),
     }
 }
@@ -417,6 +472,15 @@ const isHostTrustRecord = (value: unknown): value is LocalHostTrustRecord =>
     isRecord(value) &&
     hasString(value, "hostId") &&
     hasString(value, "label") &&
+    hasString(value, "createdAt") &&
+    hasNullableString(value, "lastSeenAt") &&
+    hasEnum(value, "status", ["trusted", "revoked"] as const)
+
+const isDeviceTrustRecord = (value: unknown): value is LocalDeviceTrustRecord =>
+    isRecord(value) &&
+    hasString(value, "deviceId") &&
+    hasString(value, "label") &&
+    hasOptionalString(value, "platform") &&
     hasString(value, "createdAt") &&
     hasNullableString(value, "lastSeenAt") &&
     hasEnum(value, "status", ["trusted", "revoked"] as const)

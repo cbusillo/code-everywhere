@@ -34,6 +34,7 @@ const host: LocalHostTrustRecord = {
 const device: LocalDeviceTrustRecord = {
     deviceId: "device-phone",
     label: "Callisto iPhone",
+    platform: "apple",
     createdAt,
     lastSeenAt: "2026-04-29T18:02:00.000Z",
     status: "trusted",

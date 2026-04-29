@@ -74,7 +74,8 @@ continues to own the trusted-record list for the local deployment mode. Broker
 snapshots derive session trust from projected `hostId` and the host registry;
 sessions without a host id remain explicit unverified legacy sessions. The local
 broker exposes a narrow trust API for inspecting the registry and upserting or
-revoking host records; it does not store route auth tokens in trust records.
+revoking host and native device records; it does not store route auth tokens,
+APNs tokens, or device-held secrets in trust records.
 
 ### Clients
 

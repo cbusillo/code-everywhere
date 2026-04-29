@@ -20,6 +20,69 @@ public struct AppleDeviceIdentity: Codable, Equatable, Sendable {
         self.createdAt = createdAt
         self.lastSeenAt = lastSeenAt
     }
+
+    public func trustRecord(status: AppleDeviceTrustStatus = .trusted) -> AppleDeviceTrustRecord {
+        AppleDeviceTrustRecord(
+            deviceId: deviceId,
+            label: displayName,
+            platform: platform,
+            createdAt: createdAt,
+            lastSeenAt: lastSeenAt,
+            status: status
+        )
+    }
+
+    public func trustRegistrationPayload(status: AppleDeviceTrustStatus = .trusted) -> AppleDeviceTrustRegistrationPayload {
+        AppleDeviceTrustRegistrationPayload(device: trustRecord(status: status))
+    }
+}
+
+public enum AppleDeviceTrustStatus: String, Codable, Equatable, Sendable {
+    case trusted
+    case revoked
+}
+
+public struct AppleDeviceTrustRecord: Codable, Equatable, Sendable {
+    public var deviceId: String
+    public var label: String
+    public var platform: String
+    public var createdAt: Date
+    public var lastSeenAt: Date?
+    public var status: AppleDeviceTrustStatus
+
+    public init(
+        deviceId: String,
+        label: String,
+        platform: String,
+        createdAt: Date,
+        lastSeenAt: Date?,
+        status: AppleDeviceTrustStatus
+    ) {
+        self.deviceId = deviceId
+        self.label = label.nilIfBlank ?? "Apple Device"
+        self.platform = platform.nilIfBlank ?? "apple"
+        self.createdAt = createdAt
+        self.lastSeenAt = lastSeenAt
+        self.status = status
+    }
+}
+
+public struct AppleDeviceTrustRegistrationPayload: Codable, Equatable, Sendable {
+    public var device: AppleDeviceTrustRecord
+
+    public init(device: AppleDeviceTrustRecord) {
+        self.device = device
+    }
+
+    public static func brokerJSONEncoder() -> JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        return encoder
+    }
+
+    public func brokerJSONData() throws -> Data {
+        try Self.brokerJSONEncoder().encode(self)
+    }
 }
 
 public struct AppleDeviceIdentityStore {

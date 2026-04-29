@@ -150,6 +150,10 @@ Every Code adapter that consumes them:
 - local trust records can be inspected with `GET /trust`; trusted host records
   can be upserted with `POST /trust/hosts`, and hosts can be revoked with
   `POST /trust/hosts/revoke`
+- trusted Apple/native device records can be upserted with
+  `POST /trust/devices`, and devices can be revoked with
+  `POST /trust/devices/revoke`; these records must not include APNs tokens or
+  device-held secrets
 - web clients pass broker auth with `VITE_COCKPIT_AUTH_TOKEN` when the broker is
   started with a token
 
