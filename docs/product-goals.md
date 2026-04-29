@@ -50,4 +50,7 @@ start by owning platform concerns such as Keychain storage, notification
 routing, notification actions, deep links, and device identity while the React
 cockpit remains the shared session and operator workflow surface. APNs
 registration and device-token upload should follow only after local
-notification routes and device identity are explicit.
+notification routes and device identity are explicit. Device trust registration
+belongs in the native shell because it combines stored broker credentials with
+the local install identity; the shared cockpit should keep owning session and
+command workflows.

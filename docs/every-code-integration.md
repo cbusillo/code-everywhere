@@ -154,6 +154,10 @@ Every Code adapter that consumes them:
   `POST /trust/devices`, and devices can be revoked with
   `POST /trust/devices/revoke`; these records must not include APNs tokens or
   device-held secrets
+- the Apple wrapper has a native device-trust client for `GET /trust`,
+  `POST /trust/devices`, and `POST /trust/devices/revoke`; it uses the stored
+  broker URL/auth token and local device identity while leaving session
+  projection and command handling in the shared cockpit
 - web clients pass broker auth with `VITE_COCKPIT_AUTH_TOKEN` when the broker is
   started with a token
 
