@@ -109,6 +109,17 @@ const run = async () => {
             detail: "Claimed by Every Code",
         })
 
+        await clickEndSessionButton(uiBrowser, session)
+        const endOutcome = await waitForCommandOutcome(brokerUrl, "end_session")
+        assertEqual(endOutcome.status, "accepted", "end session command outcome")
+        assertEqual(endOutcome.sessionId, tuiSession.sessionId, "end session command session")
+        assertEqual(endOutcome.sessionEpoch, tuiSession.sessionEpoch, "end session command epoch")
+        await waitForCommandHistoryEntry(uiBrowser, session, {
+            label: "End Session",
+            state: "accepted",
+            detail: "Claimed by Every Code",
+        })
+
         stdout.write(
             `Cockpit real TUI live-loop smoke passed at ${webUrl} using broker ${brokerUrl} and session ${tuiSession.sessionId}\n`,
         )
@@ -336,6 +347,14 @@ const sendReply = async (uiBrowser, session, message) => {
     await ui(uiBrowser, session, [
         "eval",
         `(() => { const textarea = document.querySelector('#session-reply'); if (!textarea) throw new Error('Reply textarea not found'); const value = ${JSON.stringify(message)}; const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set; setter.call(textarea, value); textarea.dispatchEvent(new Event('input', { bubbles: true })); const button = Array.from(document.querySelectorAll('button')).find((candidate) => candidate.innerText.trim() === 'Send'); if (!button) throw new Error('Send button not found'); button.click(); return true; })()`,
+    ])
+}
+
+const clickEndSessionButton = async (uiBrowser, session) => {
+    await clickFirstCommandButton(uiBrowser, session, "End")
+    await ui(uiBrowser, session, [
+        "eval",
+        "(() => { const button = Array.from(document.querySelectorAll('button')).find((candidate) => candidate.innerText.trim() === 'End session'); if (!button) throw new Error('End session confirmation button not found'); button.click(); return true; })()",
     ])
 }
 
