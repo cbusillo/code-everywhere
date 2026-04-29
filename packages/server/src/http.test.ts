@@ -114,6 +114,12 @@ describe("cockpit HTTP transport", () => {
             expect(headerResponse.statusCode).toBe(200)
             expect(headerResponse.headers["access-control-allow-headers"]).toContain("authorization")
             expect(headerResponse.headers["access-control-allow-headers"]).toContain("x-code-everywhere-token")
+
+            await expect(
+                sendJson(protectedBaseUrl, "GET", "/trust", undefined, { authorization: "Bearer test-secret" }),
+            ).resolves.toMatchObject({
+                statusCode: 200,
+            })
         } finally {
             await new Promise<void>((resolve, reject) => {
                 protectedServer.close((error) => {
@@ -209,6 +215,73 @@ describe("cockpit HTTP transport", () => {
         } finally {
             await new Promise<void>((resolve) => trustedServer.close(() => resolve()))
         }
+    })
+
+    it("manages trusted host records through local trust routes", async () => {
+        const trustStore = createLocalTrustRegistryStore()
+        const trustServer = createCockpitHttpServer({ trustStore })
+        let trustBaseUrl: string
+
+        try {
+            await new Promise<void>((resolve) => {
+                trustServer.listen(0, "127.0.0.1", resolve)
+            })
+            const address = trustServer.address() as AddressInfo
+            trustBaseUrl = `http://127.0.0.1:${String(address.port)}`
+
+            await expect(sendJson(trustBaseUrl, "GET", "/trust")).resolves.toMatchObject({
+                statusCode: 200,
+                body: {
+                    version: 1,
+                    operator: null,
+                    hosts: [],
+                    devices: [],
+                },
+            })
+
+            const host = {
+                hostId: "host-workhorse",
+                label: "Workhorse Mac",
+                createdAt: "2026-04-29T19:40:00.000Z",
+                lastSeenAt: null,
+                status: "trusted",
+            }
+            await expect(sendJson(trustBaseUrl, "POST", "/trust/hosts", { host })).resolves.toMatchObject({
+                statusCode: 200,
+                body: {
+                    hosts: [host],
+                },
+            })
+
+            await expect(
+                sendJson(trustBaseUrl, "POST", "/trust/hosts/revoke", {
+                    hostId: "host-workhorse",
+                    revokedAt: "2026-04-29T19:45:00.000Z",
+                }),
+            ).resolves.toMatchObject({
+                statusCode: 200,
+                body: {
+                    hosts: [{ ...host, lastSeenAt: "2026-04-29T19:45:00.000Z", status: "revoked" }],
+                },
+            })
+        } finally {
+            await new Promise<void>((resolve) => trustServer.close(() => resolve()))
+        }
+    })
+
+    it("rejects malformed trust management requests", async () => {
+        await expect(sendJson(baseUrl, "POST", "/trust/hosts", { hostId: "host-workhorse" })).resolves.toMatchObject({
+            statusCode: 400,
+            body: { error: "Expected one local host trust record" },
+        })
+        await expect(sendJson(baseUrl, "POST", "/trust/hosts/revoke", { hostId: "host-workhorse" })).resolves.toMatchObject({
+            statusCode: 400,
+            body: { error: "Expected hostId and revokedAt strings" },
+        })
+        await expect(sendJson(baseUrl, "PUT", "/trust", {})).resolves.toMatchObject({
+            statusCode: 405,
+            body: { error: "Method not allowed" },
+        })
     })
 
     it("ingests command outcome events", async () => {

@@ -72,7 +72,9 @@ operator records. Broker auth tokens remain route authorization only. Apple
 clients can keep device-held secrets in Keychain later, while the local broker
 continues to own the trusted-record list for the local deployment mode. Broker
 snapshots derive session trust from projected `hostId` and the host registry;
-sessions without a host id remain explicit unverified legacy sessions.
+sessions without a host id remain explicit unverified legacy sessions. The local
+broker exposes a narrow trust API for inspecting the registry and upserting or
+revoking host records; it does not store route auth tokens in trust records.
 
 ### Clients
 

@@ -168,12 +168,14 @@ export const startCockpitHttpServer = async (
         throw new CockpitServerCliError("--auth-token or CODE_EVERYWHERE_AUTH_TOKEN is required when binding beyond loopback")
     }
 
-    const stores =
-        options.dataFile === undefined || options.dataFile === null ? undefined : createPersistentCockpitStores(options.dataFile)
     const trustStore =
         options.trustFile === undefined || options.trustFile === null
             ? createLocalTrustRegistryStore()
             : createPersistentLocalTrustRegistryStore(options.trustFile)
+    const stores =
+        options.dataFile === undefined || options.dataFile === null
+            ? undefined
+            : createPersistentCockpitStores(options.dataFile, { eventStoreOptions: { trustStore } })
     const server = createCockpitHttpServer({ ...(stores ?? {}), trustStore, authToken })
     await new Promise<void>((resolve, reject) => {
         const onError = (error: Error) => {
