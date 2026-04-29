@@ -17,6 +17,12 @@ const pendingWorkSmokeEnabled = () =>
             .trim()
             .toLowerCase(),
     )
+const stalePendingWorkSmokeEnabled = () =>
+    ["1", "true", "yes", "on"].includes(
+        String(process.env.CODE_EVERYWHERE_SMOKE_STALE_PENDING_WORK ?? "")
+            .trim()
+            .toLowerCase(),
+    )
 const pendingWorkApprovalDecision = () => {
     const decision = String(process.env.CODE_EVERYWHERE_SMOKE_APPROVAL_DECISION ?? "approve")
         .trim()
@@ -66,7 +72,11 @@ const run = async () => {
         })
 
         if (pendingWorkSmokeEnabled()) {
-            await runPendingWorkSmoke(uiBrowser, session, brokerUrl, tuiSession)
+            if (stalePendingWorkSmokeEnabled()) {
+                await runStalePendingWorkSmoke(uiBrowser, session, brokerUrl, tuiSession)
+            } else {
+                await runPendingWorkSmoke(uiBrowser, session, brokerUrl, tuiSession)
+            }
             stdout.write(
                 `Cockpit real TUI pending-work smoke passed at ${webUrl} using broker ${brokerUrl} and session ${tuiSession.sessionId}\n`,
             )
@@ -233,7 +243,7 @@ const waitForTuiIdleSession = async (brokerUrl, expectedSession) => {
     throw new Error(`Timed out waiting for real TUI session ${expectedSession.sessionId} to be idle`)
 }
 
-const waitForCommandOutcome = async (brokerUrl, commandKind, expectedSession) => {
+const waitForCommandOutcome = async (brokerUrl, commandKind, expectedSession, options = {}) => {
     const startedAt = Date.now()
     while (Date.now() - startedAt < 20000) {
         const snapshot = await getJson(`${brokerUrl}/snapshot`)
@@ -241,7 +251,8 @@ const waitForCommandOutcome = async (brokerUrl, commandKind, expectedSession) =>
             (candidate) =>
                 candidate.commandKind === commandKind &&
                 candidate.sessionId === expectedSession.sessionId &&
-                candidate.sessionEpoch === expectedSession.sessionEpoch,
+                candidate.sessionEpoch === expectedSession.sessionEpoch &&
+                (options.status === undefined || candidate.status === options.status),
         )
         if (outcome !== undefined) {
             return outcome
@@ -369,6 +380,18 @@ const getJson = async (url) => {
     return response.json()
 }
 
+const postJson = async (url, body) => {
+    const response = await globalThis.fetch(url, {
+        method: "POST",
+        headers: { accept: "application/json", "content-type": "application/json" },
+        body: JSON.stringify(body),
+    })
+    if (!response.ok) {
+        throw new Error(`POST ${url} failed with ${String(response.status)}`)
+    }
+    return response.json()
+}
+
 const ui = async (uiBrowser, session, args) => runCommand(uiBrowser, ["--session", session, ...args])
 
 const assertBrowserState = async (uiBrowser, session, expected) => {
@@ -398,7 +421,7 @@ const runPendingWorkSmoke = async (uiBrowser, session, brokerUrl, tuiSession) =>
     const approvalDecision = pendingWorkApprovalDecision()
     await waitForElementCount(uiBrowser, session, ".approval-card", 1)
     await clickButtonByText(uiBrowser, session, approvalDecision === "approve" ? "Approve" : "Deny")
-    const approvalOutcome = await waitForCommandOutcome(brokerUrl, "approval_decision", tuiSession)
+    const approvalOutcome = await waitForCommandOutcome(brokerUrl, "approval_decision", tuiSession, { status: "accepted" })
     assertEqual(approvalOutcome.status, "accepted", "approval decision outcome")
     assertEqual(approvalOutcome.sessionId, tuiSession.sessionId, "approval decision session")
     assertEqual(approvalOutcome.sessionEpoch, tuiSession.sessionEpoch, "approval decision epoch")
@@ -433,6 +456,83 @@ const runPendingWorkSmoke = async (uiBrowser, session, brokerUrl, tuiSession) =>
     })
     await waitForPendingWorkState(brokerUrl, tuiSession, { approvalCount: 0, inputCount: 0 })
     await waitForElementCount(uiBrowser, session, ".input-card", 0)
+}
+
+const runStalePendingWorkSmoke = async (uiBrowser, session, brokerUrl, tuiSession) => {
+    const staleEpoch = `${tuiSession.sessionEpoch}-stale`
+    await waitForElementCount(uiBrowser, session, ".approval-card", 1)
+
+    const staleApproval = await enqueueCommand(brokerUrl, {
+        kind: "approval_decision",
+        sessionId: tuiSession.sessionId,
+        sessionEpoch: staleEpoch,
+        approvalId: "ce-smoke-approval",
+        decision: "approve",
+    })
+    const staleApprovalOutcome = await waitForCommandOutcomeById(brokerUrl, staleApproval.id)
+    assertEqual(staleApprovalOutcome.status, "rejected", "stale approval decision outcome")
+    assertIncludes(staleApprovalOutcome.reason, "stale session scope", "stale approval rejection reason")
+    await waitForCommandHistoryEntry(uiBrowser, session, {
+        label: "Approval Decision",
+        state: "rejected",
+        detail: "stale session scope",
+    })
+    await waitForPendingWorkState(brokerUrl, tuiSession, { approvalCount: 1, inputCount: 0 })
+    await waitForElementCount(uiBrowser, session, ".approval-card", 1)
+    await waitForElementCount(uiBrowser, session, ".input-card", 0)
+
+    await clickButtonByText(uiBrowser, session, "Approve")
+    const approvalOutcome = await waitForCommandOutcome(brokerUrl, "approval_decision", tuiSession, { status: "accepted" })
+    assertEqual(approvalOutcome.status, "accepted", "approval decision outcome after stale rejection")
+    await waitForPendingWorkState(brokerUrl, tuiSession, { approvalCount: 0, inputCount: 1 })
+    await waitForElementCount(uiBrowser, session, ".approval-card", 0)
+    await waitForElementCount(uiBrowser, session, ".input-card", 1)
+
+    const staleInput = await enqueueCommand(brokerUrl, {
+        kind: "request_user_input_response",
+        sessionId: tuiSession.sessionId,
+        sessionEpoch: staleEpoch,
+        inputId: "ce-smoke-input",
+        turnId: "ce-smoke-pending-turn",
+        answers: [{ questionId: "mode", value: "Continue (Recommended)" }],
+    })
+    const staleInputOutcome = await waitForCommandOutcomeById(brokerUrl, staleInput.id)
+    assertEqual(staleInputOutcome.status, "rejected", "stale request_user_input response outcome")
+    assertIncludes(staleInputOutcome.reason, "stale session scope", "stale request_user_input rejection reason")
+    await waitForCommandHistoryEntry(uiBrowser, session, {
+        label: "Request User Input Response",
+        state: "rejected",
+        detail: "stale session scope",
+    })
+    await waitForPendingWorkState(brokerUrl, tuiSession, { approvalCount: 0, inputCount: 1 })
+    await waitForElementCount(uiBrowser, session, ".input-card", 1)
+}
+
+const enqueueCommand = async (brokerUrl, command) => {
+    const snapshot = await postJson(`${brokerUrl}/commands`, { command })
+    const record = snapshot.commands.findLast(
+        (candidate) =>
+            candidate.command.kind === command.kind &&
+            candidate.command.sessionId === command.sessionId &&
+            candidate.command.sessionEpoch === command.sessionEpoch,
+    )
+    if (record === undefined) {
+        throw new Error(`Expected command ${command.kind} to be recorded`)
+    }
+    return record
+}
+
+const waitForCommandOutcomeById = async (brokerUrl, commandId) => {
+    const startedAt = Date.now()
+    while (Date.now() - startedAt < 10000) {
+        const snapshot = await getJson(`${brokerUrl}/snapshot`)
+        const outcome = snapshot.state.commandOutcomes[commandId]
+        if (outcome !== undefined) {
+            return outcome
+        }
+        await delay(250)
+    }
+    throw new Error(`Timed out waiting for command outcome ${commandId}`)
 }
 
 const waitForPendingWorkState = async (brokerUrl, expectedSession, expected) => {
@@ -553,6 +653,12 @@ const waitForCommandHistoryEntry = async (uiBrowser, session, expected) => {
 const assertEqual = (actual, expected, label) => {
     if (actual !== expected) {
         throw new Error(`Expected ${label} to be ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`)
+    }
+}
+
+const assertIncludes = (actual, expected, label) => {
+    if (typeof actual !== "string" || !actual.includes(expected)) {
+        throw new Error(`Expected ${label} to include ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`)
     }
 }
 

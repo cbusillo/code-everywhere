@@ -811,13 +811,21 @@ const getCommandHistoryEntries = (
     }
 
     const outcomesByCommandId = new Map(outcomes.map((outcome) => [outcome.commandId, outcome]))
+    const visibleCommandIds = new Set<string>()
     const entries = commands
-        .filter((record) => record.command.sessionId === session.sessionId && record.command.sessionEpoch === session.sessionEpoch)
+        .filter((record) => {
+            const outcome = outcomesByCommandId.get(record.id)
+            return (
+                (record.command.sessionId === session.sessionId && record.command.sessionEpoch === session.sessionEpoch) ||
+                (outcome?.sessionId === session.sessionId && outcome.sessionEpoch === session.sessionEpoch)
+            )
+        })
         .map((record): CommandHistoryEntry => {
             const outcome = outcomesByCommandId.get(record.id)
             const state = outcome?.status ?? (record.deliveredAt === null ? "queued" : "delivered")
             const timestamp = outcome?.handledAt ?? record.deliveredAt ?? record.receivedAt
             const detail = outcome?.reason ?? (record.deliveredAt === null ? "Waiting for Every Code" : "Claimed by Every Code")
+            visibleCommandIds.add(record.id)
 
             return {
                 id: record.id,
@@ -828,13 +836,12 @@ const getCommandHistoryEntries = (
             }
         })
 
-    const knownCommandIds = new Set(commands.map((record) => record.id))
     const outcomeOnlyEntries = outcomes
         .filter(
             (outcome) =>
                 outcome.sessionId === session.sessionId &&
                 outcome.sessionEpoch === session.sessionEpoch &&
-                !knownCommandIds.has(outcome.commandId),
+                !visibleCommandIds.has(outcome.commandId),
         )
         .map(
             (outcome): CommandHistoryEntry => ({
