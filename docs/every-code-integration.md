@@ -61,14 +61,20 @@ appear without per-session pairing. Pairing every transient session would fight
 the Every Code workflow and should remain a diagnostic or recovery path, not the
 default interaction model.
 
+The first local trust persistence checkpoint should be broker-mediated and
+file-backed: keep trusted host/device/operator records in a separate local trust
+registry such as `.code-everywhere/trust.json`, while leaving broker auth tokens
+as route authorization only. The trust registry should store non-secret ids,
+labels, timestamps, and revocation state. Native clients can keep device secrets
+in OS storage such as Keychain later, but the broker-owned registry remains the
+local source of trusted records.
+
 Before LAN, hosted relay, or Apple notification work, the missing durable fields
-to evaluate are:
+to add are:
 
 - a stable host identifier separate from human-readable `hostLabel`
 - an operator/account identifier for clients that can enqueue commands
 - a device identifier for native clients and notification routing
-- a storage shape for trusted hosts/devices that is not just the broker auth
-  token
 
 ## What Not To Port
 
