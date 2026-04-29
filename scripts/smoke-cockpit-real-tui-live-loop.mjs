@@ -70,6 +70,17 @@ const run = async () => {
             state: "rejected",
             detail: "no active turn is running",
         })
+        await clickFirstCommandButton(uiBrowser, session, "Continue")
+        const continueOutcome = await waitForCommandOutcome(brokerUrl, "continue_autonomously")
+        assertEqual(continueOutcome.status, "rejected", "idle continue command outcome")
+        assertEqual(continueOutcome.reason, "no prior session history to continue", "idle continue rejection reason")
+        assertEqual(continueOutcome.sessionId, tuiSession.sessionId, "idle continue command session")
+        assertEqual(continueOutcome.sessionEpoch, tuiSession.sessionEpoch, "idle continue command epoch")
+        await waitForCommandHistoryEntry(uiBrowser, session, {
+            label: "Continue Autonomously",
+            state: "rejected",
+            detail: "no prior session history to continue",
+        })
 
         await stopProcess(broker)
         broker = null
