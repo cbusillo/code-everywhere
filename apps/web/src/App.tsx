@@ -64,6 +64,7 @@ import {
     type DraftMap,
 } from "./cockpitDrafts"
 import { describeTransportStatus, useCockpitView, type CockpitTransportStatus } from "./cockpitTransport"
+import { canManageTrust, postRevokedHost, postTrustedHost } from "./cockpitTrust"
 
 const selectedSessionId = "ce-alpha"
 
@@ -181,6 +182,7 @@ export const App = () => {
     const [replyDrafts, setReplyDrafts] = useState<DraftMap>({})
     const [inputAnswerDrafts, setInputAnswerDrafts] = useState<DraftMap>({})
     const [commandLog, setCommandLog] = useState("No command sent yet")
+    const [trustLog, setTrustLog] = useState("No trust action sent yet")
     const fallbackSession = cockpit.sessions[0]
     const activeSession =
         fallbackSession === undefined
@@ -247,6 +249,27 @@ export const App = () => {
             })
     }
 
+    const dispatchTrustAction = (label: string, session: CockpitSession, action: "trust" | "revoke") => {
+        if (!canManageTrust(cockpitView.transport)) {
+            setTrustLog(`${label} requires a live HTTP broker`)
+            return
+        }
+
+        setTrustLog(`Sending ${label} for ${session.hostLabel}`)
+        const request = action === "trust" ? postTrustedHost : postRevokedHost
+        void request(cockpitView.transport.url, session)
+            .then((snapshot) => {
+                const host =
+                    session.hostId === undefined
+                        ? undefined
+                        : snapshot.hosts.find((candidate) => candidate.hostId === session.hostId)
+                setTrustLog(`${label} saved for ${session.hostLabel}; ${host?.status ?? "host record updated"}`)
+            })
+            .catch((error: unknown) => {
+                setTrustLog(`${label} failed: ${error instanceof Error ? error.message : "Unable to update trust"}`)
+            })
+    }
+
     const selectSession = (sessionId: string) => {
         setActiveSessionId(sessionId)
         setActivePendingItemId(null)
@@ -310,9 +333,12 @@ export const App = () => {
                                 setInputAnswer={setInputAnswer}
                                 setInputNote={setInputNote}
                                 commandLog={commandLog}
+                                trustLog={trustLog}
                                 commandHistory={activeCommandHistory}
                                 commandOutcomeSummary={activeCommandOutcomeSummary}
                                 dispatchCommand={dispatchCommand}
+                                dispatchTrustAction={dispatchTrustAction}
+                                transport={cockpitView.transport}
                             />
                         </>
                     )}
@@ -638,9 +664,12 @@ type ActionRailProps = {
     setInputAnswer: (questionId: string, value: string) => void
     setInputNote: (value: string) => void
     commandLog: string
+    trustLog: string
     commandHistory: CommandHistoryEntry[]
     commandOutcomeSummary: CommandOutcomeSummary
     dispatchCommand: (label: string, command: SessionCommand) => void
+    dispatchTrustAction: (label: string, session: CockpitSession, action: "trust" | "revoke") => void
+    transport: CockpitTransportStatus
 }
 
 const ActionRail = ({
@@ -652,9 +681,12 @@ const ActionRail = ({
     setInputAnswer,
     setInputNote,
     commandLog,
+    trustLog,
     commandHistory,
     commandOutcomeSummary,
     dispatchCommand,
+    dispatchTrustAction,
+    transport,
 }: ActionRailProps) => (
     <aside className="action-rail" aria-label="Pending work and actions">
         <section className="panel work-panel priority-panel">
@@ -685,6 +717,13 @@ const ActionRail = ({
                 />
             )}
         </section>
+
+        <TrustManagementPanel
+            session={session}
+            transport={transport}
+            trustLog={trustLog}
+            dispatchTrustAction={dispatchTrustAction}
+        />
 
         <section className="panel work-panel">
             <div className="panel-heading compact-heading">
@@ -724,6 +763,67 @@ const ActionRail = ({
         </section>
     </aside>
 )
+
+const TrustManagementPanel = ({
+    session,
+    transport,
+    trustLog,
+    dispatchTrustAction,
+}: {
+    session: CockpitSession
+    transport: CockpitTransportStatus
+    trustLog: string
+    dispatchTrustAction: (label: string, session: CockpitSession, action: "trust" | "revoke") => void
+}) => {
+    const hostId = session.hostId?.trim()
+    const hasHostId = hostId !== undefined && hostId !== ""
+    const isLive = canManageTrust(transport)
+    const canTrust = hasHostId && isLive && session.trust.status !== "trusted"
+    const canRevoke = hasHostId && isLive && session.trust.status === "trusted"
+
+    return (
+        <section className="panel work-panel trust-panel" aria-label="Local trust">
+            <div className="panel-heading compact-heading">
+                <div>
+                    <p className="eyebrow">Local trust</p>
+                    <h2>Host record</h2>
+                </div>
+                <TrustPill trust={session.trust} compact />
+            </div>
+            <div className="trust-card">
+                <div>
+                    <span>Host</span>
+                    <strong>{session.hostLabel}</strong>
+                    <p>{hostId ?? "No stable host id published"}</p>
+                </div>
+                <div className="trust-actions">
+                    <button
+                        className="primary-button"
+                        type="button"
+                        disabled={!canTrust}
+                        onClick={() => dispatchTrustAction("Trust host", session, "trust")}
+                    >
+                        <ShieldCheck size={16} />
+                        Trust
+                    </button>
+                    <button
+                        className="quiet-button danger"
+                        type="button"
+                        disabled={!canRevoke}
+                        onClick={() => dispatchTrustAction("Revoke host", session, "revoke")}
+                    >
+                        <ShieldAlert size={16} />
+                        Revoke
+                    </button>
+                </div>
+                <div className="mock-log" aria-live="polite">
+                    <span>Trust status</span>
+                    <p>{trustLog}</p>
+                </div>
+            </div>
+        </section>
+    )
+}
 
 const ApprovalCard = ({
     approval,
