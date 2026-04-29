@@ -7,6 +7,7 @@ struct CodeEverywhereApp: App {
     @State private var deepLinkRoute: CockpitDeepLinkRoute?
 
     private let deepLinkParser = CockpitDeepLinkParser()
+    private let notificationRouter = CockpitNotificationRouter()
     private let settings = CockpitConnectionSettings(
         cockpitURL: URL(string: "http://127.0.0.1:5173")!,
         brokerURL: URL(string: "http://127.0.0.1:3000")!
@@ -19,7 +20,7 @@ struct CodeEverywhereApp: App {
                     .ignoresSafeArea(edges: .bottom)
             }
             .onOpenURL { url in
-                deepLinkRoute = deepLinkParser.parse(url)
+                deepLinkRoute = notificationRouter.route(from: url)?.deepLinkRoute ?? deepLinkParser.parse(url)
             }
         }
     }

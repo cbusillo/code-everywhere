@@ -104,6 +104,12 @@ and simulator-buildable with `CODE_SIGNING_ALLOWED=NO`. It launches the shared
 cockpit web-view shell and consumes the package-owned connection settings,
 Keychain-backed token storage, and deep-link parsing.
 
+Notification routing starts in Apple core as route metadata, not APNs delivery.
+Native notification payloads should carry a `code-everywhere://` route URL that
+round-trips through the same session and pending-item parser used by the app
+shell. APNs registration, device-token upload, and notification permission UX
+remain separate platform work.
+
 ## Protocol Principles
 
 - Use explicit event types and command types.
