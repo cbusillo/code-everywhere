@@ -29,16 +29,28 @@ describe("cockpit HTTP server CLI", () => {
             host: "127.0.0.1",
             port: 4789,
             dataFile: ".code-everywhere/cockpit-broker.json",
+            trustFile: ".code-everywhere/trust.json",
             authToken: null,
             help: false,
         })
         expect(
             parseCockpitServerArgs(
-                ["--host", "0.0.0.0", "--port=4900", "--data-file", "/tmp/cockpit.json", "--auth-token", "arg-secret"],
+                [
+                    "--host",
+                    "0.0.0.0",
+                    "--port=4900",
+                    "--data-file",
+                    "/tmp/cockpit.json",
+                    "--trust-file",
+                    "/tmp/trust.json",
+                    "--auth-token",
+                    "arg-secret",
+                ],
                 {
                     CODE_EVERYWHERE_HOST: "127.0.0.1",
                     CODE_EVERYWHERE_PORT: "nope",
                     CODE_EVERYWHERE_DATA_FILE: "/tmp/env-cockpit.json",
+                    CODE_EVERYWHERE_TRUST_FILE: "/tmp/env-trust.json",
                     CODE_EVERYWHERE_AUTH_TOKEN: "env-secret",
                 },
             ),
@@ -46,8 +58,12 @@ describe("cockpit HTTP server CLI", () => {
             host: "0.0.0.0",
             port: 4900,
             dataFile: "/tmp/cockpit.json",
+            trustFile: "/tmp/trust.json",
             authToken: "arg-secret",
             help: false,
+        })
+        expect(parseCockpitServerArgs([], { CODE_EVERYWHERE_TRUST_FILE: "/tmp/env-trust.json" })).toMatchObject({
+            trustFile: "/tmp/env-trust.json",
         })
         expect(parseCockpitServerArgs([], { CODE_EVERYWHERE_AUTH_TOKEN: "env-secret" })).toMatchObject({
             authToken: "env-secret",
@@ -55,7 +71,7 @@ describe("cockpit HTTP server CLI", () => {
         expect(parseCockpitServerArgs(["--auth-token", "-leading-hyphen-secret"], {})).toMatchObject({
             authToken: "-leading-hyphen-secret",
         })
-        expect(parseCockpitServerArgs(["--memory"], {})).toMatchObject({ dataFile: null })
+        expect(parseCockpitServerArgs(["--memory"], {})).toMatchObject({ dataFile: null, trustFile: null })
         expect(parseCockpitServerArgs(["--", "--help"], {})).toMatchObject({ help: true })
         expect(parseCockpitServerArgs(["--help"], { CODE_EVERYWHERE_PORT: "nope" })).toMatchObject({ help: true })
         expect(() => parseCockpitServerArgs([], { CODE_EVERYWHERE_PORT: "nope" })).toThrow("CODE_EVERYWHERE_PORT must")
@@ -65,6 +81,7 @@ describe("cockpit HTTP server CLI", () => {
         expect(() => parseCockpitServerArgs(["--port", "nope"], {})).toThrow(CockpitServerCliError)
         expect(() => parseCockpitServerArgs(["--host"], {})).toThrow("--host requires a value")
         expect(() => parseCockpitServerArgs(["--data-file"], {})).toThrow("--data-file requires a value")
+        expect(() => parseCockpitServerArgs(["--trust-file"], {})).toThrow("--trust-file requires a value")
         expect(() => parseCockpitServerArgs(["--auth-token"], {})).toThrow("--auth-token requires a value")
         expect(() => parseCockpitServerArgs(["--host", "--port", "4900"], {})).toThrow("--host requires a value")
         expect(() => parseCockpitServerArgs(["--port", "--host", "127.0.0.1"], {})).toThrow("--port requires a value")
