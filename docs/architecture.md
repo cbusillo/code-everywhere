@@ -66,6 +66,12 @@ projection events. The local broker persists its event log and command records
 to a repo-ignored JSON file by default. It does not yet provide streaming,
 authentication, direct runtime command execution, or notification delivery.
 
+Local trust should use a separate broker-owned registry beside broker state,
+such as `.code-everywhere/trust.json`, for non-secret trusted host, device, and
+operator records. Broker auth tokens remain route authorization only. Apple
+clients can keep device-held secrets in Keychain later, while the local broker
+continues to own the trusted-record list for the local deployment mode.
+
 ### Clients
 
 Expected client surfaces:
