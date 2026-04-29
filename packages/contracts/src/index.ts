@@ -22,6 +22,16 @@ export type SessionStatus = "running" | "idle" | "blocked" | "waiting-for-input"
 
 export type TurnStatus = "running" | "completed" | "blocked" | "waiting-for-input" | "waiting-for-approval" | "error"
 
+export type SessionTrustStatus = "trusted" | "unknown" | "revoked" | "unidentified"
+
+export type SessionTrust = {
+    status: SessionTrustStatus
+    hostId: string | null
+    hostLabel: string
+    trustedHostLabel: string | null
+    lastSeenAt: string | null
+}
+
 export type SessionTurn = {
     id: TurnId
     sessionId: SessionId
@@ -154,6 +164,7 @@ export type RequestedInputOption = {
 }
 
 export type ProjectedCockpitSession = EveryCodeSession & {
+    trust: SessionTrust
     attention: "none" | "approval" | "input" | "blocked" | "error"
     pendingApprovalIds: string[]
     pendingInputIds: string[]
@@ -465,6 +476,7 @@ const projectSessionHello = (state: CockpitProjectionState, session: EveryCodeSe
 
     draft.sessions[session.sessionId] = withAttention({
         ...session,
+        trust: createDefaultSessionTrust(session),
         pendingApprovalIds: epochChanged || existing === undefined ? [] : existing.pendingApprovalIds,
         pendingInputIds: epochChanged || existing === undefined ? [] : existing.pendingInputIds,
         turnIds: epochChanged || existing === undefined ? [] : existing.turnIds,
@@ -472,6 +484,14 @@ const projectSessionHello = (state: CockpitProjectionState, session: EveryCodeSe
 
     return draft
 }
+
+export const createDefaultSessionTrust = (session: Pick<EveryCodeSession, "hostId" | "hostLabel">): SessionTrust => ({
+    status: session.hostId === undefined || session.hostId.trim() === "" ? "unidentified" : "unknown",
+    hostId: session.hostId === undefined || session.hostId.trim() === "" ? null : session.hostId,
+    hostLabel: session.hostLabel,
+    trustedHostLabel: null,
+    lastSeenAt: null,
+})
 
 const withCurrentSession = (
     state: CockpitProjectionState,

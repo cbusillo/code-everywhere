@@ -27,6 +27,8 @@ import {
     Play,
     Send,
     ShieldAlert,
+    ShieldCheck,
+    ShieldQuestion,
     Square,
     TerminalSquare,
     X,
@@ -91,6 +93,29 @@ const statusTone: Record<SessionStatus, string> = {
     "waiting-for-approval": "is-waiting-approval",
     ended: "is-ended",
     error: "is-error",
+}
+
+type SessionTrustStatus = CockpitSession["trust"]["status"]
+
+const trustLabels: Record<SessionTrustStatus, string> = {
+    trusted: "Trusted",
+    unknown: "Unknown host",
+    revoked: "Revoked host",
+    unidentified: "No host id",
+}
+
+const compactTrustLabels: Record<SessionTrustStatus, string> = {
+    trusted: "Trusted",
+    unknown: "Unknown",
+    revoked: "Revoked",
+    unidentified: "No ID",
+}
+
+const trustTone: Record<SessionTrustStatus, string> = {
+    trusted: "is-trusted",
+    unknown: "is-unknown",
+    revoked: "is-revoked",
+    unidentified: "is-unidentified",
 }
 
 const stepTone: Record<TurnStep["state"], string> = {
@@ -307,7 +332,7 @@ const SessionList = ({ sessions, activeSessionId, onSelect }: SessionListProps) 
     <aside className="panel session-list" aria-label="Sessions">
         <div className="panel-heading">
             <div>
-                <p className="eyebrow">Trusted sessions</p>
+                <p className="eyebrow">Sessions</p>
                 <h2>Attention queue</h2>
             </div>
             <span className="count-badge">{sessions.length}</span>
@@ -317,7 +342,7 @@ const SessionList = ({ sessions, activeSessionId, onSelect }: SessionListProps) 
             {sessions.length === 0 ? (
                 <div className="empty-state session-empty">
                     <Check size={16} />
-                    <p>No trusted sessions in this snapshot.</p>
+                    <p>No sessions in this snapshot.</p>
                 </div>
             ) : null}
             {sessions.map((session) => (
@@ -334,7 +359,10 @@ const SessionList = ({ sessions, activeSessionId, onSelect }: SessionListProps) 
                     <span className="session-updated">{formatTime(session.updatedAt)}</span>
                     <ChevronRight className="session-chevron" size={14} aria-hidden="true" />
                     <span className="session-meta">
-                        {session.hostLabel} <span aria-hidden="true">/</span> {session.branch ?? "detached"}
+                        <span className="session-hostline">
+                            {session.hostLabel} <span aria-hidden="true">/</span> {session.branch ?? "detached"}
+                        </span>
+                        <TrustPill trust={session.trust} compact />
                     </span>
                 </button>
             ))}
@@ -511,6 +539,7 @@ const SessionDetail = ({ session, reply, setReply, dispatchCommand }: SessionDet
 
         <div className="metadata-strip" aria-label="Session metadata">
             <MetadataItem icon={MonitorDot} label="Host" value={`${session.hostLabel} / pid ${String(session.pid)}`} />
+            <MetadataItem icon={trustMetadataIcon(session.trust.status)} label="Trust" value={trustMetadataValue(session)} />
             <MetadataItem icon={GitBranch} label="Branch" value={session.branch ?? "detached"} />
             <MetadataItem icon={TerminalSquare} label="Working directory" value={session.cwd} />
             <MetadataItem icon={Info} label="Model" value={session.model} />
@@ -879,6 +908,17 @@ const StatusPill = ({ status, compact = false }: { status: SessionStatus; compac
     )
 }
 
+const TrustPill = ({ trust, compact = false }: { trust: CockpitSession["trust"]; compact?: boolean }) => {
+    const Icon = trustMetadataIcon(trust.status)
+
+    return (
+        <span className={`trust-pill ${trustTone[trust.status]} ${compact ? "is-compact" : ""}`} title={trustMetadataLabel(trust)}>
+            <Icon size={compact ? 11 : 13} aria-hidden="true" />
+            {compact ? compactTrustLabels[trust.status] : trustLabels[trust.status]}
+        </span>
+    )
+}
+
 const StatusSummary = ({ count }: { count: number }) => (
     <div className="status-summary">
         <span>{count}</span>
@@ -901,14 +941,39 @@ const MetadataItem = ({ icon: Icon, label, value }: { icon: IconComponent; label
     </div>
 )
 
+const trustMetadataIcon = (status: SessionTrustStatus): IconComponent => {
+    switch (status) {
+        case "trusted":
+            return ShieldCheck
+        case "revoked":
+            return ShieldAlert
+        case "unknown":
+        case "unidentified":
+            return ShieldQuestion
+    }
+}
+
+const trustMetadataLabel = (trust: CockpitSession["trust"]): string => {
+    if (trust.status === "trusted" || trust.status === "revoked") {
+        return `${trustLabels[trust.status]}: ${trust.trustedHostLabel ?? trust.hostId ?? trust.hostLabel}`
+    }
+
+    return trustLabels[trust.status]
+}
+
+const trustMetadataValue = (session: CockpitSession): string => {
+    const label = trustMetadataLabel(session.trust)
+    return session.trust.hostId === null ? label : `${label} / ${session.trust.hostId}`
+}
+
 const emptySessionDetailCopy = (transport: CockpitTransportStatus): string => {
     switch (transport.mode) {
         case "fixture":
             return "The cockpit is showing fake data because no local broker URL is configured."
         case "connecting":
-            return "The cockpit is connecting to the local broker and has not received trusted Every Code sessions yet."
+            return "The cockpit is connecting to the local broker and has not received Every Code sessions yet."
         case "live":
-            return "The local broker is connected and healthy, but it does not contain trusted Every Code sessions yet."
+            return "The local broker is connected and healthy, but it does not contain Every Code sessions yet."
         case "fallback":
             return transport.error === null
                 ? "The cockpit is showing the last known snapshot because the local broker is unavailable."
@@ -956,7 +1021,7 @@ export const getCockpitStateSurface = (
         return {
             tone: "success",
             title: "No live sessions",
-            detail: "The broker is healthy, but no trusted Every Code sessions have published a snapshot yet.",
+            detail: "The broker is healthy, but no Every Code sessions have published a snapshot yet.",
         }
     }
 

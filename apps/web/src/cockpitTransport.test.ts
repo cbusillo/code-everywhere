@@ -70,6 +70,7 @@ describe("cockpit HTTP transport client", () => {
             sessions: cockpitFixtureSnapshot.sessions.map((session) => {
                 const legacySession: Record<string, unknown> = { ...session }
                 delete legacySession.hostId
+                delete legacySession.trust
                 return legacySession
             }),
             state: {
@@ -78,6 +79,7 @@ describe("cockpit HTTP transport client", () => {
                     Object.entries(cockpitFixtureSnapshot.state.sessions).map(([sessionId, session]) => {
                         const legacySession: Record<string, unknown> = { ...session }
                         delete legacySession.hostId
+                        delete legacySession.trust
                         return [sessionId, legacySession]
                     }),
                 ),
@@ -91,6 +93,50 @@ describe("cockpit HTTP transport client", () => {
         expect(snapshot.sessions).toHaveLength(cockpitFixtureSnapshot.sessions.length)
         expect(snapshot.sessions.every((session) => session.hostLabel === "Callisto MBP")).toBe(true)
         expect(snapshot.sessions.every((session) => session.hostId === undefined)).toBe(true)
+        expect(snapshot.sessions.every((session) => session.trust.status === "unidentified")).toBe(true)
+        expect(Object.values(snapshot.state.sessions).every((session) => session.trust.hostId === null)).toBe(true)
+    })
+
+    it("validates trust-aware snapshot sessions", async () => {
+        const trustedSnapshot = {
+            ...cockpitFixtureSnapshot,
+            sessions: cockpitFixtureSnapshot.sessions.map((session) => ({
+                ...session,
+                trust: {
+                    status: "trusted",
+                    hostId: session.hostId,
+                    hostLabel: session.hostLabel,
+                    trustedHostLabel: "Callisto MBP",
+                    lastSeenAt: "2026-04-27T16:04:00.000Z",
+                },
+            })),
+            state: {
+                ...cockpitFixtureSnapshot.state,
+                sessions: Object.fromEntries(
+                    Object.entries(cockpitFixtureSnapshot.state.sessions).map(([sessionId, session]) => [
+                        sessionId,
+                        {
+                            ...session,
+                            trust: {
+                                status: "trusted",
+                                hostId: session.hostId,
+                                hostLabel: session.hostLabel,
+                                trustedHostLabel: "Callisto MBP",
+                                lastSeenAt: "2026-04-27T16:04:00.000Z",
+                            },
+                        },
+                    ]),
+                ),
+            },
+        }
+        const fetchImpl: Parameters<typeof fetchCockpitSnapshot>[1] = () =>
+            Promise.resolve(new Response(JSON.stringify(trustedSnapshot), { status: 200 }))
+
+        const snapshot = await fetchCockpitSnapshot("http://127.0.0.1:4789", fetchImpl)
+
+        expect(snapshot.sessions).toHaveLength(cockpitFixtureSnapshot.sessions.length)
+        expect(snapshot.sessions.every((session) => session.trust.status === "trusted")).toBe(true)
+        expect(snapshot.sessions.every((session) => session.trust.trustedHostLabel === "Callisto MBP")).toBe(true)
     })
 
     it("keeps empty snapshots as valid live cockpit state", () => {

@@ -25,10 +25,12 @@ import {
     type CockpitEventStore,
     type CockpitIngestionSnapshot,
 } from "./index.js"
+import type { LocalTrustRegistryStore } from "./trust.js"
 
 export type CockpitHttpHandlerOptions = {
     store?: CockpitEventStore
     commandStore?: CockpitCommandStore
+    trustStore?: LocalTrustRegistryStore
     maxBodyBytes?: number
     authToken?: string | null
 }
@@ -73,7 +75,11 @@ const sessionCommandKindValues = [
 const commandOutcomeStatusValues = ["accepted", "rejected"] as const satisfies readonly CommandOutcome["status"][]
 
 export const createCockpitHttpHandler = (options: CockpitHttpHandlerOptions = {}) => {
-    const store = options.store ?? createCockpitEventStore()
+    const store =
+        options.store ??
+        (options.trustStore === undefined
+            ? createCockpitEventStore()
+            : createCockpitEventStore([], { trustStore: options.trustStore }))
     const commandStore = options.commandStore ?? createCockpitCommandStore()
     const maxBodyBytes = options.maxBodyBytes ?? defaultMaxBodyBytes
     const authToken = normalizeAuthToken(options.authToken)

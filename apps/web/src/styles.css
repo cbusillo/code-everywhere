@@ -439,6 +439,16 @@ code {
     white-space: nowrap;
 }
 
+.session-hostline {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.session-meta .trust-pill {
+    flex: 0 0 auto;
+}
+
 .session-row > .status-dot {
     grid-area: dot;
 }
@@ -1035,6 +1045,7 @@ legend {
 }
 
 .status-pill,
+.trust-pill,
 .turn-status,
 .count-badge,
 .unread-count {
@@ -1050,12 +1061,14 @@ legend {
     white-space: nowrap;
 }
 
-.status-pill {
+.status-pill,
+.trust-pill {
     border: 1px solid;
     padding: 4px 8px;
 }
 
-.status-pill.is-compact {
+.status-pill.is-compact,
+.trust-pill.is-compact {
     min-width: 0;
     max-width: 92px;
     padding: 3px 7px;
@@ -1065,7 +1078,8 @@ legend {
 }
 
 .status-pill.is-compact svg,
-.status-pill.is-compact .status-dot {
+.status-pill.is-compact .status-dot,
+.trust-pill.is-compact svg {
     flex: 0 0 auto;
 }
 
@@ -1114,6 +1128,25 @@ legend {
     border-color: var(--warning-border);
     background: var(--warning-bg-soft);
     color: var(--warning-text);
+}
+
+.trust-pill.is-trusted {
+    border-color: var(--success-border);
+    background: var(--success-bg-soft);
+    color: var(--success-text);
+}
+
+.trust-pill.is-unknown,
+.trust-pill.is-unidentified {
+    border-color: var(--muted-border);
+    background: var(--muted-bg-soft);
+    color: var(--fg-2);
+}
+
+.trust-pill.is-revoked {
+    border-color: var(--danger-border);
+    background: var(--danger-bg-soft);
+    color: var(--danger-text);
 }
 
 .status-pill.is-running .status-dot,
@@ -1645,7 +1678,8 @@ legend {
         max-width: 122px;
     }
 
-    .status-pill.is-compact {
+    .status-pill.is-compact,
+    .trust-pill.is-compact {
         max-width: 122px;
     }
 

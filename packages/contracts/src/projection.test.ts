@@ -97,6 +97,13 @@ describe("cockpit projection", () => {
 
         expect(state.sessions["session-1"]?.status).toBe("idle")
         expect(state.sessions["session-1"]?.hostId).toBe("host-workhorse")
+        expect(state.sessions["session-1"]?.trust).toEqual({
+            status: "unknown",
+            hostId: "host-workhorse",
+            hostLabel: "workhorse-mac",
+            trustedHostLabel: null,
+            lastSeenAt: null,
+        })
         expect(state.sessions["session-1"]?.currentTurnId).toBe("turn-1")
         expect(state.sessions["session-1"]?.turnIds).toEqual(["turn-1"])
         expect(state.turns["turn-1"]?.status).toBe("completed")
@@ -112,6 +119,8 @@ describe("cockpit projection", () => {
 
         expect(state.sessions["session-1"]?.hostLabel).toBe("workhorse-mac")
         expect(state.sessions["session-1"]?.hostId).toBeUndefined()
+        expect(state.sessions["session-1"]?.trust.status).toBe("unidentified")
+        expect(state.sessions["session-1"]?.trust.hostId).toBeNull()
     })
 
     it("keeps replayed turn steps idempotent", () => {

@@ -12,6 +12,7 @@ import {
     type CockpitIngestionSnapshot,
 } from "./index"
 import { createCockpitHttpServer } from "./http"
+import { createLocalTrustRegistryStore } from "./trust"
 
 const baseSession: EveryCodeSession = {
     sessionId: "session-1",
@@ -168,6 +169,46 @@ describe("cockpit HTTP transport", () => {
         const body = response.body as CockpitIngestionSnapshot
         expect(body.sessions[0]?.hostLabel).toBe("workhorse-mac")
         expect(body.sessions[0]?.hostId).toBeUndefined()
+        expect(body.sessions[0]?.trust.status).toBe("unidentified")
+    })
+
+    it("returns trust-aware sessions from the configured trust registry", async () => {
+        const trustStore = createLocalTrustRegistryStore()
+        trustStore.upsertHost({
+            hostId: "host-workhorse",
+            label: "Workhorse Mac",
+            createdAt: "2026-04-27T16:00:00.000Z",
+            lastSeenAt: "2026-04-27T16:10:00.000Z",
+            status: "trusted",
+        })
+        const trustedServer = createCockpitHttpServer({ trustStore })
+        let trustedBaseUrl: string
+
+        try {
+            await new Promise<void>((resolve) => {
+                trustedServer.listen(0, "127.0.0.1", resolve)
+            })
+            const address = trustedServer.address() as AddressInfo
+            trustedBaseUrl = `http://127.0.0.1:${String(address.port)}`
+
+            const response = await sendJson(trustedBaseUrl, "POST", "/events", {
+                event: {
+                    kind: "session_hello",
+                    session: baseSession,
+                },
+            })
+
+            expect(response.statusCode).toBe(200)
+            expect((response.body as CockpitIngestionSnapshot).sessions[0]?.trust).toEqual({
+                status: "trusted",
+                hostId: "host-workhorse",
+                hostLabel: "workhorse-mac",
+                trustedHostLabel: "Workhorse Mac",
+                lastSeenAt: "2026-04-27T16:10:00.000Z",
+            })
+        } finally {
+            await new Promise<void>((resolve) => trustedServer.close(() => resolve()))
+        }
     })
 
     it("ingests command outcome events", async () => {
