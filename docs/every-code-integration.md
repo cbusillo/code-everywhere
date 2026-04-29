@@ -79,6 +79,12 @@ to add are:
 - an operator/account identifier for clients that can enqueue commands
 - a device identifier for native clients and notification routing
 
+The first Apple-client shell should be a native wrapper around the shared web
+cockpit. It should use the same broker snapshot, command, and trust APIs as the
+web client while native code handles device-held secrets, notification
+registration, notification action routing, and deep links into session or
+pending-work state.
+
 ## What Not To Port
 
 Avoid carrying Discord-specific concepts into the core model:

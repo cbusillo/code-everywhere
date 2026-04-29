@@ -138,7 +138,10 @@ Use established UI primitives before custom design:
 - Radix UI for accessible primitives
 - Tailwind for styling
 - lucide-react for icons
-- Capacitor or SwiftUI when native Apple behavior matters
+- SwiftUI native wrapper for the first Apple shell, hosting the shared cockpit
+  while native code owns Keychain, notifications, deep links, and device identity
+- native SwiftUI views later when a specific Apple interaction cannot be served
+  well by the shared cockpit
 
 ## Review Rule
 

@@ -81,10 +81,20 @@ revoking host records; it does not store route auth tokens in trust records.
 Expected client surfaces:
 
 - web cockpit for development and desktop use
-- iOS/iPadOS app or native wrapper for mobile operation
+- native Apple wrapper around the shared web cockpit for the first iOS,
+  iPadOS, and macOS checkpoint
+- later native SwiftUI surfaces where platform behavior justifies replacing a
+  shared cockpit view
 - macOS app or menu-bar companion when useful
 
 The first client should prove the structured cockpit, not every platform concern at once.
+
+The first Apple shell should be SwiftUI-based and host the existing cockpit in a
+native web view. Native code should initially own Keychain-backed device or
+broker credentials, APNs registration, notification action routing, deep links,
+and platform shell behavior. The React cockpit remains the source for session
+presentation and operator workflows until native-only screens have a specific
+reason to exist.
 
 ## Protocol Principles
 
