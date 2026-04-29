@@ -49,7 +49,7 @@
             "product decisions change"
         ]
     },
-    "importantWorkflows": ["CI", "CodeQL"],
+    "importantWorkflows": ["CI", "CodeQL", "Apple"],
     "qaLabels": [],
     "deployLabels": [],
     "healthUrls": [],

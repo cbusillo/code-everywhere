@@ -1,0 +1,37 @@
+---
+name: Apple
+
+"on":
+    workflow_dispatch:
+    pull_request:
+        paths:
+            - ".github/workflows/apple.yml"
+            - "apps/apple/**"
+            - "package.json"
+            - "README.md"
+            - "docs/**"
+    push:
+        branches:
+            - main
+        paths:
+            - ".github/workflows/apple.yml"
+            - "apps/apple/**"
+            - "package.json"
+            - "README.md"
+            - "docs/**"
+
+permissions:
+    contents: read
+
+jobs:
+    swift-package:
+        runs-on: macos-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Swift build
+              run: swift build --package-path apps/apple
+
+            - name: Swift test
+              run: swift test --package-path apps/apple
