@@ -7,16 +7,7 @@ Keep this file small. Put durable project knowledge in `docs/` and link to it fr
 - Package manager: `pnpm`
 - Language: TypeScript first
 - App direction: React + shadcn/ui + Radix + Tailwind for the cockpit, with a native Apple wrapper/client when notifications and device integration matter.
-
-## Commands
-
-- Install: `pnpm install`
-- Format check: `pnpm format:check`
-- Format: `pnpm format`
-- Lint: `pnpm lint`
-- Type check: `pnpm typecheck`
-- Test: `pnpm test`
-- Full gate: `pnpm validate`
+- Use `.github/github-repo-workflow.json` for repo commands and quality gates.
 
 ## Operating Rules
 
