@@ -79,6 +79,13 @@ to add are:
 - an operator/account identifier for clients that can enqueue commands
 - a device identifier for native clients and notification routing
 
+Apple clients create a local install-scoped device identity before APNs work.
+That identity is non-secret metadata: a stable device id, display label,
+platform, creation timestamp, and last-seen timestamp. It can later be mirrored
+into the broker trust registry as a trusted device record. Push tokens,
+device-held credentials, and any signing or registration secrets must stay out
+of user defaults and behind Keychain or another `SecretStore` implementation.
+
 The first Apple-client shell should be a native wrapper around the shared web
 cockpit. It should use the same broker snapshot, command, and trust APIs as the
 web client while native code handles device-held secrets, notification
