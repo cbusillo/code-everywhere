@@ -7,6 +7,7 @@ import {
     createCockpitFixtureFromSnapshot,
     getAttentionSessions,
     getOperatorAttentionSummary,
+    getSessionDetailSummary,
     statusLabels,
 } from "./cockpitData"
 
@@ -141,5 +142,28 @@ describe("cockpit fake data", () => {
 
         expect(summary.counts.input).toBe(1)
         expect(summary.items.some((item) => item.id === "input:input-empty")).toBe(false)
+    })
+
+    it("summarizes current turn detail and step categories", () => {
+        const session = cockpitFixture.sessions.find((candidate) => candidate.sessionId === "ce-alpha")
+        expect(session).toBeDefined()
+        if (session === undefined) {
+            throw new Error("Expected ce-alpha fixture session")
+        }
+
+        const summary = getSessionDetailSummary(session)
+
+        expect(summary.currentTurn?.id).toBe("turn-alpha-3")
+        expect(summary.latestTurn?.id).toBe("turn-alpha-3")
+        expect(summary.totalSteps).toBe(2)
+        expect(summary.stepCounts).toMatchObject({
+            artifact: 0,
+            diff: 0,
+            message: 0,
+            tool: 1,
+            status: 1,
+        })
+        expect(summary.blockedCount).toBe(3)
+        expect(summary.errorCount).toBe(0)
     })
 })

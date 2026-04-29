@@ -44,6 +44,17 @@ export type CockpitFixture = {
     staleEvents: StaleCockpitEvent[]
 }
 
+export type TurnStepSummary = Record<SessionTurn["steps"][number]["kind"], number>
+
+export type SessionDetailSummary = {
+    currentTurn: SessionTurn | undefined
+    latestTurn: SessionTurn | undefined
+    stepCounts: TurnStepSummary
+    totalSteps: number
+    errorCount: number
+    blockedCount: number
+}
+
 export type OperatorAttentionKind = "approval" | "input" | "error" | "blocked" | "stale-command" | "rejected-command"
 
 export type OperatorAttentionItem = {
@@ -552,6 +563,55 @@ export const getSessionById = (sessionId: SessionId): CockpitSession => {
 
 export const getAttentionSessions = (sessions: CockpitSession[]): CockpitSession[] =>
     sessions.filter((session) => session.attention !== "none")
+
+export const getSessionDetailSummary = (session: CockpitSession): SessionDetailSummary => {
+    const currentTurn = session.currentTurnId === null ? undefined : session.turns.find((turn) => turn.id === session.currentTurnId)
+    const latestTurn = currentTurn ?? session.turns.at(-1)
+    const detailTurn = currentTurn ?? latestTurn
+    const stepCounts = emptyTurnStepSummary()
+    let errorCount = 0
+    let blockedCount = 0
+
+    if (detailTurn !== undefined) {
+        if (detailTurn.status === "error") {
+            errorCount += 1
+        }
+        if (
+            detailTurn.status === "blocked" ||
+            detailTurn.status === "waiting-for-approval" ||
+            detailTurn.status === "waiting-for-input"
+        ) {
+            blockedCount += 1
+        }
+        for (const step of detailTurn.steps) {
+            stepCounts[step.kind] += 1
+            if (step.state === "error") {
+                errorCount += 1
+            }
+            if (step.state === "blocked") {
+                blockedCount += 1
+            }
+        }
+    }
+
+    return {
+        currentTurn,
+        latestTurn,
+        stepCounts,
+        totalSteps: Object.values(stepCounts).reduce((total, count) => total + count, 0),
+        errorCount,
+        blockedCount,
+    }
+}
+
+const emptyTurnStepSummary = (): TurnStepSummary => ({
+    message: 0,
+    tool: 0,
+    status: 0,
+    diff: 0,
+    artifact: 0,
+    error: 0,
+})
 
 export const getOperatorAttentionSummary = (
     fixture: Pick<CockpitFixture, "approvals" | "commandOutcomes" | "requestedInputs" | "sessions">,

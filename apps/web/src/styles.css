@@ -457,6 +457,87 @@ code {
     background: var(--bg-base);
 }
 
+.current-turn-summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px 14px;
+    border-bottom: 1px solid var(--border-default);
+    background: var(--bg-elevated);
+    padding: 12px 20px;
+}
+
+.current-turn-summary h3,
+.current-turn-summary p {
+    margin: 0;
+}
+
+.current-turn-summary h3 {
+    margin-top: 3px;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0;
+}
+
+.current-turn-summary p:not(.eyebrow) {
+    margin-top: 4px;
+    color: var(--fg-2);
+    font-size: 12.5px;
+    line-height: 1.45;
+}
+
+.turn-summary-metrics,
+.step-kind-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.turn-summary-metrics {
+    justify-content: flex-end;
+}
+
+.detail-metric,
+.step-kind-summary span {
+    display: inline-flex;
+    min-height: 26px;
+    align-items: center;
+    gap: 5px;
+    border: 1px solid var(--border-default);
+    border-radius: 999px;
+    background: var(--bg-sunken);
+    color: var(--fg-2);
+    padding: 3px 8px;
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+.detail-metric strong,
+.step-kind-summary strong {
+    color: var(--fg-1);
+    font-family: var(--font-mono);
+    font-size: 12px;
+}
+
+.detail-metric.is-warning {
+    border-color: var(--warning-border);
+    background: var(--warning-bg-soft);
+    color: var(--warning-text);
+}
+
+.detail-metric.is-danger {
+    border-color: var(--danger-border);
+    background: var(--danger-bg-soft);
+    color: var(--danger-text);
+}
+
+.step-kind-summary {
+    grid-column: 1 / -1;
+}
+
+.step-kind-summary svg {
+    color: var(--fg-3);
+}
+
 .empty-cockpit-panel {
     justify-content: center;
     padding: 20px;
@@ -1434,6 +1515,15 @@ legend {
         padding: 10px 16px;
     }
 
+    .current-turn-summary {
+        grid-template-columns: 1fr;
+        padding: 10px 16px;
+    }
+
+    .turn-summary-metrics {
+        justify-content: flex-start;
+    }
+
     .detail-title-block h2 {
         margin-top: 7px;
         font-size: 19px;
@@ -1722,6 +1812,12 @@ legend {
 
     .metadata-strip {
         grid-template-columns: 1fr;
+    }
+
+    .detail-metric,
+    .step-kind-summary span {
+        flex: 1 1 92px;
+        justify-content: center;
     }
 
     .attention-overview {

@@ -39,12 +39,15 @@ import { canPostCockpitCommand, postCockpitCommand } from "./cockpitCommands"
 import {
     getAttentionSessions,
     getOperatorAttentionSummary,
+    getSessionDetailSummary,
     hasActionableRequestedInput,
     statusLabels,
     type CockpitSession,
     type OperatorAttentionItem,
     type OperatorAttentionKind,
     type OperatorAttentionSummary,
+    type SessionDetailSummary,
+    type TurnStepSummary,
 } from "./cockpitData"
 import {
     getDraftValue,
@@ -121,6 +124,8 @@ const stepKindLabel: Record<TurnStep["kind"], string> = {
     artifact: "Artifact",
     error: "Error",
 }
+
+const stepKindOrder: TurnStep["kind"][] = ["message", "tool", "diff", "artifact", "status", "error"]
 
 const turnRailTone: Record<TurnStatus, string> = {
     running: "is-running",
@@ -476,6 +481,8 @@ type SessionDetailProps = {
 
 const SessionDetail = ({ session, reply, setReply, dispatchCommand }: SessionDetailProps) => (
     <section className="panel detail-panel" aria-label="Active session detail">
+        <CurrentTurnSummary summary={getSessionDetailSummary(session)} />
+
         <div className="detail-header">
             <div className="detail-title-block">
                 <div className="detail-status-row">
@@ -553,6 +560,48 @@ const SessionDetail = ({ session, reply, setReply, dispatchCommand }: SessionDet
             ))}
         </section>
     </section>
+)
+
+const CurrentTurnSummary = ({ summary }: { summary: SessionDetailSummary }) => {
+    const turn = summary.currentTurn ?? summary.latestTurn
+
+    return (
+        <section className="current-turn-summary" aria-label="Current turn summary">
+            <div>
+                <p className="eyebrow">Current turn</p>
+                <h3>{turn?.title ?? "No turns yet"}</h3>
+                <p>{turn?.summary ?? "This session has not published turn detail yet."}</p>
+            </div>
+            <div className="turn-summary-metrics" aria-label="Turn detail counts">
+                <MetricPill label="Steps" value={summary.totalSteps} />
+                <MetricPill label="Blocked" value={summary.blockedCount} tone={summary.blockedCount > 0 ? "warning" : undefined} />
+                <MetricPill label="Errors" value={summary.errorCount} tone={summary.errorCount > 0 ? "danger" : undefined} />
+            </div>
+            <StepKindSummary counts={summary.stepCounts} />
+        </section>
+    )
+}
+
+const MetricPill = ({ label, value, tone }: { label: string; value: number; tone?: "danger" | "warning" | undefined }) => (
+    <span className={`detail-metric ${tone === undefined ? "" : `is-${tone}`}`}>
+        <strong>{value}</strong>
+        {label}
+    </span>
+)
+
+const StepKindSummary = ({ counts }: { counts: TurnStepSummary }) => (
+    <div className="step-kind-summary" aria-label="Step categories">
+        {stepKindOrder.map((kind) => {
+            const Icon = stepKindIcon[kind]
+            return (
+                <span key={kind}>
+                    <Icon size={13} aria-hidden="true" />
+                    <strong>{counts[kind]}</strong>
+                    {stepKindLabel[kind]}
+                </span>
+            )
+        })}
+    </div>
 )
 
 type ActionRailProps = {
