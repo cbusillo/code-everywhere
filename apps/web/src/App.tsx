@@ -36,7 +36,15 @@ import {
 import { useMemo, useState } from "react"
 
 import { canPostCockpitCommand, postCockpitCommand } from "./cockpitCommands"
-import { getAttentionSessions, statusLabels, type CockpitSession } from "./cockpitData"
+import {
+    getAttentionSessions,
+    getOperatorAttentionSummary,
+    statusLabels,
+    type CockpitSession,
+    type OperatorAttentionItem,
+    type OperatorAttentionKind,
+    type OperatorAttentionSummary,
+} from "./cockpitData"
 import {
     getDraftValue,
     getRequestedInputAnswers,
@@ -116,6 +124,24 @@ const turnRailTone: Record<TurnStatus, string> = {
     error: "is-error",
 }
 
+const attentionLabels: Record<OperatorAttentionKind, string> = {
+    approval: "Approvals",
+    input: "Inputs",
+    error: "Errors",
+    blocked: "Blocked",
+    "stale-command": "Stale",
+    "rejected-command": "Rejected",
+}
+
+const attentionIcon: Record<OperatorAttentionKind, IconComponent> = {
+    approval: ShieldAlert,
+    input: MessageSquareText,
+    error: OctagonAlert,
+    blocked: AlertCircle,
+    "stale-command": History,
+    "rejected-command": X,
+}
+
 export const App = () => {
     const cockpitView = useCockpitView()
     const cockpit = cockpitView.fixture
@@ -129,6 +155,7 @@ export const App = () => {
             ? undefined
             : (cockpit.sessions.find((session) => session.sessionId === activeSessionId) ?? fallbackSession)
     const attentionSessions = useMemo(() => getAttentionSessions(cockpit.sessions), [cockpit.sessions])
+    const attentionSummary = useMemo(() => getOperatorAttentionSummary(cockpit), [cockpit])
     const activeApproval = cockpit.approvals.find((approval) => approval.sessionId === activeSession?.sessionId)
     const activeInput = cockpit.requestedInputs.find((input) => input.sessionId === activeSession?.sessionId)
     const activeCommandHistory = getCommandHistoryEntries(cockpit.commands, cockpit.commandOutcomes, activeSession)
@@ -199,6 +226,8 @@ export const App = () => {
                         </button>
                     </div>
                 </header>
+
+                <AttentionOverview summary={attentionSummary} onSelectSession={setActiveSessionId} />
 
                 <section className="cockpit-grid" aria-label="Every Code sessions cockpit">
                     <SessionList
@@ -283,6 +312,61 @@ const SessionList = ({ sessions, activeSessionId, onSelect }: SessionListProps) 
         </div>
     </aside>
 )
+
+type AttentionOverviewProps = {
+    summary: OperatorAttentionSummary
+    onSelectSession: (sessionId: string) => void
+}
+
+const AttentionOverview = ({ summary, onSelectSession }: AttentionOverviewProps) => {
+    const nextItem = summary.nextItem
+
+    return (
+        <section className="attention-overview" aria-label="Operator attention summary">
+            <div className="attention-next">
+                <p className="eyebrow">Next action</p>
+                {nextItem === undefined ? (
+                    <div className="attention-clear">
+                        <Check size={15} aria-hidden="true" />
+                        <span>No pending operator attention in this snapshot.</span>
+                    </div>
+                ) : (
+                    <AttentionNextButton item={nextItem} onSelectSession={onSelectSession} />
+                )}
+            </div>
+            <div className="attention-metrics" aria-label="Attention counts">
+                {attentionMetricKinds.map((kind) => (
+                    <span className={`attention-metric is-${kind}`} key={kind}>
+                        <strong>{summary.counts[kind]}</strong>
+                        {attentionLabels[kind]}
+                    </span>
+                ))}
+            </div>
+        </section>
+    )
+}
+
+const attentionMetricKinds: OperatorAttentionKind[] = ["approval", "input", "error", "blocked", "stale-command", "rejected-command"]
+
+const AttentionNextButton = ({
+    item,
+    onSelectSession,
+}: {
+    item: OperatorAttentionItem
+    onSelectSession: (sessionId: string) => void
+}) => {
+    const Icon = attentionIcon[item.kind]
+
+    return (
+        <button className={`attention-next-button is-${item.kind}`} type="button" onClick={() => onSelectSession(item.sessionId)}>
+            <Icon size={16} aria-hidden="true" />
+            <span className="attention-kind">{attentionLabels[item.kind]}</span>
+            <strong>{item.title}</strong>
+            <span>{item.sessionId}</span>
+            <small>{item.detail}</small>
+        </button>
+    )
+}
 
 const EmptySessionDetail = ({ transport }: { transport: CockpitTransportStatus }) => (
     <section className="panel detail-panel empty-cockpit-panel" aria-label="Active session detail">

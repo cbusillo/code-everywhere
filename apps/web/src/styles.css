@@ -113,13 +113,116 @@ button {
     gap: 8px;
 }
 
+.attention-overview {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    border: 1px solid var(--border-default);
+    border-bottom: 0;
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+    background: var(--bg-elevated);
+    padding: 8px 12px;
+}
+
+.attention-next {
+    display: grid;
+    min-width: 0;
+    gap: 5px;
+}
+
+.attention-next-button,
+.attention-clear {
+    display: flex;
+    min-width: 0;
+    min-height: 34px;
+    align-items: center;
+    gap: 8px;
+    border-radius: var(--radius-sm);
+}
+
+.attention-next-button {
+    width: 100%;
+    border: 1px solid var(--border-default);
+    background: var(--bg-sunken);
+    color: var(--fg-1);
+    cursor: pointer;
+    padding: 6px 10px;
+    text-align: left;
+}
+
+.attention-next-button:hover {
+    border-color: var(--border-strong);
+    background: var(--bg-hover);
+}
+
+.attention-next-button > strong,
+.attention-next-button > small,
+.attention-next-button > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.attention-next-button > strong {
+    flex: 1;
+    font-size: 13px;
+    font-weight: 650;
+}
+
+.attention-next-button > small,
+.attention-next-button > span:not(.attention-kind) {
+    color: var(--fg-3);
+    font-size: 12px;
+}
+
+.attention-kind {
+    color: var(--fg-2);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.attention-clear {
+    color: var(--fg-2);
+    font-size: 13px;
+}
+
+.attention-metrics {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+}
+
+.attention-metric {
+    display: inline-flex;
+    min-height: 26px;
+    align-items: center;
+    gap: 5px;
+    border: 1px solid var(--border-default);
+    border-radius: 999px;
+    background: var(--bg-sunken);
+    color: var(--fg-2);
+    padding: 3px 8px;
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+.attention-metric > strong {
+    color: var(--fg-1);
+    font-family: var(--font-mono);
+    font-size: 12px;
+}
+
 .cockpit-grid {
     display: grid;
     grid-template-columns: minmax(205px, 0.68fr) minmax(330px, 1.5fr) minmax(260px, 0.86fr);
     flex: 1;
     min-height: calc(100vh - 70px);
     border: 1px solid var(--border-default);
-    border-radius: var(--radius-md);
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
     background: var(--bg-elevated);
     overflow: hidden;
 }
@@ -1228,6 +1331,24 @@ legend {
         align-items: start;
     }
 
+    .attention-overview {
+        grid-template-columns: 1fr;
+    }
+
+    .attention-next-button {
+        display: grid;
+        grid-template-columns: auto auto minmax(0, 1fr) auto;
+        min-height: 34px;
+    }
+
+    .attention-next-button > small {
+        display: none;
+    }
+
+    .attention-metrics {
+        justify-content: flex-start;
+    }
+
     .action-rail {
         grid-column: 1 / -1;
         grid-template-columns: minmax(0, 1.05fr) minmax(280px, 0.95fr);
@@ -1443,6 +1564,10 @@ legend {
         min-height: auto;
     }
 
+    .attention-next-button > span:not(.attention-kind) {
+        justify-self: end;
+    }
+
     .session-list {
         order: 1;
         border-top: 1px solid var(--border-default);
@@ -1546,6 +1671,15 @@ legend {
 
     .metadata-strip {
         grid-template-columns: 1fr;
+    }
+
+    .attention-overview {
+        padding: 8px;
+    }
+
+    .attention-metric {
+        flex: 1 1 92px;
+        justify-content: center;
     }
 
     .metadata-item,
