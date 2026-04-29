@@ -109,7 +109,9 @@ Notification routing starts in Apple core as route metadata, not APNs delivery.
 Native notification payloads should carry a `code-everywhere://` route URL that
 round-trips through the same session and pending-item parser used by the app
 shell. Local notification readiness is modeled with native permission state and
-a scheduling abstraction for pending work, but APNs registration,
+a scheduling abstraction for pending work. The Apple shell polls the broker
+snapshot while active, derives actionable pending approval/input notifications,
+and reconciles schedule/cancel calls through that abstraction. APNs registration,
 device-token upload, hosted delivery, and production notification actions remain
 separate platform work.
 
