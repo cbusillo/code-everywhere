@@ -1,13 +1,86 @@
 {
     "defaultBranch": "main",
+    "projectType": "product-app",
+    "docs": {
+        "index": "docs/README.md",
+        "productGoals": "docs/product-goals.md",
+        "architecture": "docs/architecture.md",
+        "everyCodeIntegration": "docs/every-code-integration.md",
+        "repoSettings": "docs/repo-settings.md",
+        "uiReference": "docs/ui-reference.md",
+        "decisions": "docs/decisions",
+        "style": ["docs/style/coding-standards.md", "docs/style/typescript.md", "docs/style/testing.md", "docs/style/ui-ux.md"]
+    },
+    "qualityGate": {
+        "install": {
+            "default": "pnpm install --frozen-lockfile"
+        },
+        "test": {
+            "default": "pnpm test"
+        },
+        "lint": {
+            "default": "pnpm lint"
+        },
+        "format": {
+            "check": "pnpm format:check",
+            "write": "pnpm format"
+        },
+        "typecheck": {
+            "default": "pnpm typecheck"
+        },
+        "build": {
+            "validate": "pnpm validate",
+            "web": "pnpm --filter @code-everywhere/web build",
+            "server": "pnpm --filter @code-everywhere/server build",
+            "contracts": "pnpm --filter @code-everywhere/contracts build"
+        },
+        "inspection": {
+            "tool": "jetbrains",
+            "ide": "WebStorm",
+            "scopePreference": ["changed_files", "directory", "whole_project"]
+        },
+        "docsRequiredWhen": [
+            "behavior changes",
+            "api changes",
+            "config changes",
+            "operations changes",
+            "ownership boundaries change",
+            "user-visible UI changes",
+            "product decisions change"
+        ]
+    },
     "importantWorkflows": ["CI", "CodeQL"],
     "qaLabels": [],
     "deployLabels": [],
     "healthUrls": [],
     "relatedRepos": ["cbusillo/code", "cbusillo/discord-blue"],
     "validatedThrough": [],
+    "githubSignals": {
+        "postMerge": {
+            "waitForActions": true,
+            "checkSecurityAndQuality": true
+        },
+        "capabilities": {
+            "codeScanning": "available",
+            "secretScanning": "available",
+            "dependabotAlerts": "available",
+            "securityAdvisories": "available"
+        },
+        "refreshWhen": ["repo visibility changes", "GitHub plan changes", "security settings change", "token permissions change"]
+    },
     "cleanup": {
         "deleteMergedLocalBranches": true,
         "removeMergedCleanWorktrees": true
+    },
+    "metadataFreshness": {
+        "updateWhen": [
+            "docs routing changes",
+            "validation gates change",
+            "primary commands change",
+            "important workflows change",
+            "repo relationship changes",
+            "cleanup policy changes",
+            "ownership boundaries change"
+        ]
     }
 }
