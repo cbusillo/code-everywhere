@@ -44,4 +44,10 @@ The UI should optimize for scanning and action, not spectacle.
 
 iOS, iPadOS, and macOS are first-class targets. A PWA can be useful for fast iteration, but the product should be ready for a native wrapper or native client because notifications, deep links, Keychain, and OS integration are part of the experience.
 
-The first Apple checkpoint is a native Apple wrapper around the shared web cockpit rather than a PWA-only path or full native rewrite. Native code should start by owning platform concerns such as Keychain storage, notification registration, notification actions, deep links, and device identity while the React cockpit remains the shared session and operator workflow surface.
+The first Apple checkpoint is a native Apple wrapper around the shared web
+cockpit rather than a PWA-only path or full native rewrite. Native code should
+start by owning platform concerns such as Keychain storage, notification
+routing, notification actions, deep links, and device identity while the React
+cockpit remains the shared session and operator workflow surface. APNs
+registration and device-token upload should follow only after local
+notification routes and device identity are explicit.
