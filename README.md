@@ -75,8 +75,11 @@ pnpm apple:app:build
 
 The iOS/iPadOS app target builds for the simulator with signing disabled. It
 hosts the shared cockpit in a native web view and keeps native code focused on
-platform boundaries: Keychain-backed broker tokens, future device identity, and
-deep-link routing into session or pending-work state.
+platform boundaries: editable cockpit/broker connection settings,
+Keychain-backed broker tokens, device identity and trust registration, local
+notification readiness, and deep-link routing into session or pending-work
+state. For simulator or device testing against a Mac-hosted server, configure
+the Apple shell with the Mac LAN URL rather than `localhost`.
 
 ## References
 

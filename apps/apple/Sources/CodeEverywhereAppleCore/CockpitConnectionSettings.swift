@@ -12,6 +12,88 @@ public struct CockpitConnectionSettings: Equatable, Sendable {
     }
 }
 
+public enum CockpitConnectionSettingsDraftError: Error, Equatable {
+    case invalidCockpitURL
+    case invalidBrokerURL
+}
+
+public struct CockpitConnectionSettingsDraft: Equatable, Sendable {
+    public var cockpitURLText: String
+    public var brokerURLText: String
+    public var brokerAuthTokenText: String
+
+    public init(cockpitURLText: String, brokerURLText: String = "", brokerAuthTokenText: String = "") {
+        self.cockpitURLText = cockpitURLText
+        self.brokerURLText = brokerURLText
+        self.brokerAuthTokenText = brokerAuthTokenText
+    }
+
+    public init(settings: CockpitConnectionSettings) {
+        self.init(
+            cockpitURLText: settings.cockpitURL.absoluteString,
+            brokerURLText: settings.brokerURL?.absoluteString ?? "",
+            brokerAuthTokenText: settings.brokerAuthToken ?? "",
+        )
+    }
+
+    public func connectionSettings() throws -> CockpitConnectionSettings {
+        guard let cockpitURL = validatedURL(cockpitURLText) else {
+            throw CockpitConnectionSettingsDraftError.invalidCockpitURL
+        }
+
+        let brokerURL: URL?
+        if let brokerURLText = brokerURLText.nilIfBlank {
+            guard let parsedBrokerURL = validatedURL(brokerURLText) else {
+                throw CockpitConnectionSettingsDraftError.invalidBrokerURL
+            }
+            brokerURL = parsedBrokerURL
+        } else {
+            brokerURL = nil
+        }
+
+        return CockpitConnectionSettings(
+            cockpitURL: cockpitURL,
+            brokerURL: brokerURL,
+            brokerAuthToken: brokerAuthTokenText
+        )
+    }
+
+    private func validatedURL(_ value: String) -> URL? {
+        guard let text = value.nilIfBlank, let url = URL(string: text), url.host() != nil else {
+            return nil
+        }
+
+        switch url.scheme?.lowercased() {
+        case "http", "https":
+            return url
+        default:
+            return nil
+        }
+    }
+}
+
+public enum CockpitConnectionSettingsOverrides {
+    public static func settings(from arguments: [String]) throws -> CockpitConnectionSettings? {
+        guard arguments.contains("--code-everywhere-connection") else {
+            return nil
+        }
+
+        return try CockpitConnectionSettingsDraft(
+            cockpitURLText: optionValue(after: "--cockpit-url", in: arguments) ?? "",
+            brokerURLText: optionValue(after: "--broker-url", in: arguments) ?? "",
+            brokerAuthTokenText: optionValue(after: "--broker-auth-token", in: arguments) ?? ""
+        ).connectionSettings()
+    }
+
+    private static func optionValue(after option: String, in arguments: [String]) -> String? {
+        guard let index = arguments.firstIndex(of: option), arguments.indices.contains(index + 1) else {
+            return nil
+        }
+
+        return arguments[index + 1]
+    }
+}
+
 public struct CockpitConnectionSettingsStore {
     private let defaults: UserDefaults
     private let secrets: SecretStore
