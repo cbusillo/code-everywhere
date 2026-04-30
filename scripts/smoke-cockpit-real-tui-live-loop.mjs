@@ -9,6 +9,8 @@ import { kill as killProcess, platform, stderr, stdout } from "node:process"
 import { setTimeout as delay } from "node:timers/promises"
 
 const smokePollIntervalMs = 500
+const smokeHostId = "smoke-host-real-tui"
+const smokeHostLabel = "Smoke TUI"
 const processLogs = new WeakMap()
 const requestedInputSmokeNote = "Freeform note from the real TUI smoke."
 const pendingWorkSmokeEnabled = () =>
@@ -61,12 +63,15 @@ const run = async () => {
 
         tui = startCodeTui(expectBinary, codeBinary, brokerUrl, workdir)
         const tuiSession = await waitForTuiSession(brokerUrl)
+        assertEqual(tuiSession.hostId, smokeHostId, "real TUI session host id")
+        assertEqual(tuiSession.trust.hostId, smokeHostId, "real TUI session trust host id")
 
         await ui(uiBrowser, session, ["open", webUrl, "1000"])
         await ui(uiBrowser, session, ["wait-for", "text=Connected to Code Everywhere.", "15000"])
         await assertBrowserState(uiBrowser, session, {
             mode: "Live HTTP",
-            hostLabel: "Smoke TUI",
+            hostLabel: smokeHostLabel,
+            hostId: smokeHostId,
             summary: "Connected to Code Everywhere.",
             sessionId: tuiSession.sessionId,
         })
@@ -136,7 +141,8 @@ const run = async () => {
         await ui(uiBrowser, session, ["wait-for", "text=Connected to Code Everywhere.", "15000"])
         await assertBrowserState(uiBrowser, session, {
             mode: "Live HTTP",
-            hostLabel: "Smoke TUI",
+            hostLabel: smokeHostLabel,
+            hostId: smokeHostId,
             summary: "Connected to Code Everywhere.",
             sessionId: tuiSession.sessionId,
         })
@@ -197,10 +203,11 @@ const startCodeTui = (expectBinary, codeBinary, brokerUrl, workdir) => {
     const script = `
 set code_binary ${tclQuote(codeBinary)}
 set broker_url ${tclQuote(brokerUrl)}
-set host_label ${tclQuote("Smoke TUI")}
+set host_label ${tclQuote(smokeHostLabel)}
+set host_id ${tclQuote(smokeHostId)}
 set workdir ${tclQuote(workdir)}
 set timeout 45
-spawn $code_binary -c remote_inbox.enabled=true -c remote_inbox.code_everywhere_url=$broker_url -c remote_inbox.host_label=$host_label -C $workdir
+spawn $code_binary -c remote_inbox.enabled=true -c remote_inbox.code_everywhere_url=$broker_url -c remote_inbox.host_label=$host_label -c remote_inbox.host_id=$host_id -C $workdir
 after 45000
 send "\\003"
 after 500
@@ -221,7 +228,7 @@ const waitForTuiSession = async (brokerUrl) => {
     const startedAt = Date.now()
     while (Date.now() - startedAt < 20000) {
         const snapshot = await getJson(`${brokerUrl}/snapshot`)
-        const session = snapshot.sessions.find((candidate) => candidate.hostLabel === "Smoke TUI")
+        const session = snapshot.sessions.find((candidate) => candidate.hostLabel === smokeHostLabel)
         if (session !== undefined) {
             return session
         }
