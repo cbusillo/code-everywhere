@@ -36,6 +36,10 @@ targets:
                       CFBundleURLSchemes:
                           - code-everywhere
                 LSRequiresIPhoneOS: true
+                NSAppTransportSecurity:
+                    NSAllowsLocalNetworking: true
+                NSLocalNetworkUsageDescription: >-
+                    Code Everywhere connects to your local Every Code broker.
                 UIApplicationSceneManifest:
                     UIApplicationSupportsMultipleScenes: true
                 UIApplicationSupportsIndirectInputEvents: true

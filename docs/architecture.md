@@ -105,6 +105,12 @@ and simulator-buildable with `CODE_SIGNING_ALLOWED=NO`. It launches the shared
 cockpit web-view shell and consumes the package-owned connection settings,
 Keychain-backed token storage, and deep-link parsing.
 
+The Apple shell exposes those connection settings in native UI so a simulator or
+device can point at a local, LAN, or hosted cockpit/broker pair without editing
+source or committing generated project files. Broker auth tokens remain in
+Keychain; public cockpit and broker URLs remain in user defaults. Local HTTP and
+LAN proof runs require the app target's local-network transport permissions.
+
 Notification routing starts in Apple core as route metadata, not APNs delivery.
 Native notification payloads should carry a `code-everywhere://` route URL that
 round-trips through the same session and pending-item parser used by the app
